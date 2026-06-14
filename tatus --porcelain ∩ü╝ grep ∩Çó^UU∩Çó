@@ -1,0 +1,24 @@
+warning: in the working copy of 'public/sw.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/customer-end-pages/[restaurantSlug]/orders/[Code]/StatusClient.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/customer-end-pages/[restaurantSlug]/orders/[Code]/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/dashboard/layout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/dashboard/orders/LiveOrders.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/dashboard/orders/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/dashboard/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/dashboard/tables/add/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/login/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/offline/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/signup/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/test/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/LiveOrdersComponent.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/OfflineIndicator.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/lib/api/orders.ts', LF will be replaced by CRLF the next time Git touches it
+package-lock.json
+public/sw.js
+src/app/dashboard/layout.tsx
+src/app/dashboard/orders/LiveOrders.tsx
+src/app/dashboard/orders/page.tsx
+src/app/dashboard/page.tsx
+src/app/dashboard/tables/add/page.tsx
+src/app/dashboard/tables/page.tsx
+src/app/signup/page.tsx

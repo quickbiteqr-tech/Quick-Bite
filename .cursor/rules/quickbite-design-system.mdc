@@ -1,0 +1,34 @@
+---
+description: Quick Bite QR brand colors and UI tokens — match existing dashboard and auth screens
+globs: "**/*.{tsx,ts,css}"
+alwaysApply: false
+---
+
+# Quick Bite design system
+
+Use these consistently for new screens, CTAs, and marketing UI. Prefer **Tailwind utilities** that match existing components (`DashboardNavCards`, `AuthSlider`, dashboard layout).
+
+## Brand accent (primary actions, selection, focus rings)
+
+- **Brand green:** `#6DBE45` — primary buttons, icon tiles, text selection: `selection:bg-[#6DBE45] selection:text-white`
+- **Green hover / borders:** `hover:border-[#6DBE45]/35`, `hover:bg-[#6DBE45]/5`, `focus-visible:ring-[#6DBE45]/30`, `ring-[#6DBE45]/20` (see sidebar nav)
+- **Green solid blocks:** `bg-[#6DBE45]` with white/inverted icons (`brightness-0 invert`) on small icon wrappers
+
+Do **not** introduce a second primary hue (no random blues/greens) for main CTAs unless the user asks for a redesign.
+
+## Neutrals (surfaces and type)
+
+- **Page background (app shell):** `bg-slate-50` for full-height layouts (dashboard)
+- **Cards / panels:** `bg-white`, `border-slate-100` or `border-slate-200`, `shadow-sm` or `shadow-md`, `rounded-xl` / `rounded-2xl`
+- **Primary text:** `text-slate-900`, `text-slate-800`
+- **Secondary text:** `text-slate-500`, `text-slate-600`
+- **Chrome / subtle borders:** `border-slate-200`, `ring-slate-100`
+
+## Semantic tokens (shadcn)
+
+When using `Button`, `Card`, etc., default `primary`/`secondary` map to CSS variables in `globals.css`. For **brand-colored** primary CTAs on standalone pages, use explicit `bg-[#6DBE45]` classes to match `AuthSlider` and dashboard (not only `bg-primary`).
+
+## Patterns to reuse
+
+- Dashboard shell: `min-h-screen bg-slate-50` + `selection:bg-[#6DBE45] selection:text-white`
+- Auth-style full page: `min-h-screen bg-gray-100` (existing login/signup) **or** slate-50 to align with dashboard — stay consistent within one flow

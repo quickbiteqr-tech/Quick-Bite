@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "qrcode": "https://esm.sh/qrcode@1.5.1",
+    "canvas": "https://deno.land/x/canvas@1.4.2/mod.ts",
+    "supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+    "supabase-helpers": "https://deno.land/x/supabase_edge_helpers@0.0.3/mod.ts",
+    "server": "https://deno.land/std@0.177.0/http/server.ts"
+  }
+}
