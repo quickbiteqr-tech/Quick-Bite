@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 
-function parseMenuItemId(rawId: string): number | null {
-  const parsed = Number(rawId);
-  if (!Number.isInteger(parsed) || parsed <= 0) return null;
-  return parsed;
+function parseMenuItemId(rawId: string): string | null {
+  // Check if it's a valid UUID format using a regular expression
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  
+  if (!rawId || !uuidRegex.test(rawId)) {
+    return null;
+  }
+  
+  return rawId;
 }
 
 async function verifyOwnership(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
-  menuItemId: number
+  menuItemId: string
 ): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
@@ -94,6 +99,8 @@ export async function PUT(
       return NextResponse.json({ error: "Menu item ID is required" }, { status: 400 });
     }
     const parsedId = parseMenuItemId(id);
+    console.log("Menu Id", id);
+    console.log("Parsed Menu Id", parsedId);
     if (!parsedId) {
       return NextResponse.json({ error: "Invalid menu item ID" }, { status: 400 });
     }

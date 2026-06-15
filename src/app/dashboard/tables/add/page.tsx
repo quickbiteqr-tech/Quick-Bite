@@ -24,12 +24,13 @@ const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-[#6DBE45] focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/20 sm:text-base';
 
 export default function AddTablePage() {
-  const [isSubmitting] = useState<boolean>(false);
   const router = useRouter();
   const [loading, setLoading] = useState<boolean>(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [tableNumber, setTableNumber] = useState<number>();
   const [url, setUrl] = useState<string>();
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -52,32 +53,50 @@ export default function AddTablePage() {
     fetchRestaurant();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsSubmitting(true); // Disable the button while it works
 
     const form = e.currentTarget;
     const formData = new FormData(form);
     const tableNumberRaw = formData.get('tableNumber') as string;
     const num = Number(tableNumberRaw);
     setTableNumber(num);
+    
     const restaurantSlug = restaurant?.slug;
     const restaurantId = restaurant?.id;
-    if (!restaurantSlug) {
+    
+    if (!restaurantSlug || !restaurantId) {
+      setIsSubmitting(false);
       return;
     }
 
-    const createTable = async (rid: string, tableNum: number) => {
-      const qrUrl = await generateQR(restaurantSlug, tableNum);
-      setUrl(qrUrl);
-      const { error } = await supabase.rpc('create_table_with_qr', {
-        restaurant_uuid: rid,
-        table_num: tableNum,
-        qr_url: qrUrl,
+    try {
+      // Step 1: Create the blank table in the database FIRST
+      const { error: rpcError } = await supabase.rpc('create_table_with_qr', {
+        restaurant_uuid: restaurantId,
+        table_num: num,
       });
-      if (error) throw error;
-    };
-    if (restaurantId) {
-      createTable(restaurantId, num);
+      
+      if (rpcError) throw rpcError;
+
+      // Step 2: Trigger the Edge Function
+      const response = await generateQR(restaurantSlug, num);
+      
+      // Step 3: Safely extract the exact URL string, no matter how generateQR returns it
+
+      console.log("Response is", response);
+      if (response) {
+        // If it returns the full API object
+        setUrl(response);
+      }
+      
+    } catch (error) {
+      console.error("Failed to create table:", error);
+      alert("Something went wrong creating the table.");
+    } finally {
+      // Step 4: Turn off the loading state so the button resets
+      setIsSubmitting(false);
     }
   };
 
@@ -88,7 +107,7 @@ export default function AddTablePage() {
     link.click();
   };
 
-  if (loading) {
+  if (loading || isSubmitting) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-[#6DBE45]" aria-hidden />
