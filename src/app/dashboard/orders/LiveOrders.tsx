@@ -93,16 +93,18 @@ const LiveOrders = ({ embedded = false }: LiveOrdersProps) => {
           id, track_code, status, created_at, is_prepaid,
           table:tables ( id, table_number ),
           restaurant:restaurants ( id, restaurant_name, slug, user_id ),
-          order_items (
-            id, quantity, price,
-            menu_item:menu_items ( id, name )
-          )
+order_items (
+  id, quantity, price,
+  menu_item:menu_item_id ( id, name )
+)
         `)
         .in('restaurant_id', ids)
         .in('status', ['pending','confirmed','preparing','ready','cancelled'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      console.log("Order data",data);
 
       // 4) normalize → one card per order item
       const normalized: OrderItem[] = (data || []).flatMap((order: unknown) => {
