@@ -39,21 +39,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to create order in database." }, { status: 500 });
     }
 
-    const itemsPayload = cartItems.map((i: { id: string; quantity: number; price: number }) => ({
-      order_id: order.id,
-      menu_item: i.id,
-      quantity: i.quantity,
-      price: i.price,
-      status: "pending", // Initialize each item with pending status
-    }));
-    const { error: itemsError } = await supabase.from("order_items").insert(itemsPayload);
+    const generatedTrackCode = 'ORD-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    // 2. Include the new track_code in your Supabase insert payload
+    const { data, error: itemsError } = await supabase
+      .from("orders")
+      .insert({
+        restaurant_id: restaurantId,
+        table_id: table.id, 
+        total_amount: totalAmount,
+        status: "pending",
+        is_prepaid: false,
+        track_code: generatedTrackCode, // <-- ADDED HERE!
+      })
+      .select('id, track_code') // Ensure it returns the track_code back to us
+      .single();
 
     if (itemsError) {
       await supabase.from('orders').delete().eq('id', order.id); // Rollback
       return NextResponse.json({ error: `Could not save order items: ${itemsError.message}` }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, trackCode: order.track_code }, { status: 201 });
+    return NextResponse.json({ success: true, trackCode: generatedTrackCode }, { status: 201 });
   } catch (err: unknown) {
     console.error("Postpaid API Error:", err);
     return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 });
