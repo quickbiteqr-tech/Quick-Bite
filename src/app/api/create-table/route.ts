@@ -1,9 +1,35 @@
 // File: app/api/create-table/route.ts
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE! 
+);
 
 export async function POST(req: Request) {
   try {
-    const { restaurantSlug, tableNumber } = await req.json();
+    const { restaurantSlug, tableNumber, restaurantId } = await req.json();
+
+    if (!restaurantSlug || !restaurantId || !tableNumber) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    const { error: dbError } = await supabaseAdmin.rpc('create_table_with_qr', {
+      restaurant_uuid: restaurantId,
+      table_num: tableNumber,
+    });
+
+    if (dbError) {
+      // PostgreSQL error code '23505' means "unique violation" (duplicate record)
+      if (dbError.code === '23505' || dbError.message.includes('duplicate')) {
+        return NextResponse.json(
+          { error: `Table ${tableNumber} already exists.` },
+          { status: 409 }
+        );
+      }
+      throw new Error(`Database error: ${dbError.message}`);
+    }
 
     // 1. Automatically grab the current base URL (localhost or Vercel)
     const baseUrl = new URL(req.url).origin;
@@ -31,6 +57,13 @@ export async function POST(req: Request) {
 
     if (!res.ok) {
       const errorText = await res.text();
+
+      await supabaseAdmin
+        .from('tables') // Replace 'tables' with your actual table name if it is different
+        .delete()
+        .eq('restaurant_id', restaurantId)
+        .eq('table_number', tableNumber);
+
       return NextResponse.json(
         { error: `Supabase function failed: ${errorText}` },
         { status: res.status }
@@ -38,8 +71,17 @@ export async function POST(req: Request) {
     }
 
     const data = await res.json();
+    const qrUrl = data.qrCodeUrl || data.url; 
 
-    return NextResponse.json({ success: true, ...data });
+    if (qrUrl) {
+       await supabaseAdmin
+        .from('tables') // Replace 'tables' with your actual table name
+        .update({ qr_url: qrUrl })
+        .eq('restaurant_id', restaurantId)
+        .eq('table_number', tableNumber);
+    }
+
+    return NextResponse.json({ success: true, qrCodeUrl: qrUrl, ...data });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json(

@@ -4,11 +4,22 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useTables } from '@/lib/hooks/useTables';
 import QrCodeDisplay from '@/components/tables/QrCodeDisplay';
-import { Plus, Trash2, Edit } from 'lucide-react';
+import { Plus, Trash2, Edit, Loader2, Download, Eye } from 'lucide-react';
+import { toast } from 'sonner';
+import QRModal from '@/components/QRModal';
+
+type TableItem = {
+  id: string | number;
+  table_number: string | number;
+  qr_code_url?: string | null;
+  [key: string]: any; 
+};
 
 export default function TablesPage() {
   const { tables, loading, error, deleteTable } = useTables();
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [selectedTableForModal, setSelectedTableForModal] = useState<TableItem | null>(null);
 
   const filteredTables = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -16,17 +27,23 @@ export default function TablesPage() {
     return tables.filter((t) => t.table_number.toLowerCase().includes(q));
   }, [tables, searchQuery]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center font-sans text-slate-800">
-        <div
-          className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-[#6DBE45]"
-          aria-hidden
-        />
-        <p className="mt-4 text-sm text-slate-500">Loading tables…</p>
-      </div>
-    );
-  }
+  const handleDownloadQR = async (downloadUrl: string, tableNumber: string) => {
+    try {
+      const response = await fetch(downloadUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `table-${tableNumber}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error("Failed to download the QR code.");
+    }
+  };
 
   return (
     <div className="min-h-[calc(100vh-2rem)] font-sans text-slate-800 selection:bg-[#6DBE45] selection:text-white">
@@ -115,7 +132,13 @@ export default function TablesPage() {
             </p>
           </div>
 
-          {filteredTables.length === 0 ? (
+          {loading ? (
+            // Localised Loading State
+            <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <Loader2 className="h-10 w-10 animate-spin text-[#6DBE45]" aria-hidden />
+              <p className="mt-4 text-sm text-slate-500">Loading tables…</p>
+            </div>
+          ) :filteredTables.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-[#6DBE45]/25 bg-[#6DBE45]/10 px-4 py-10 text-center sm:py-12">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-[#6DBE45]/20 bg-white shadow-sm">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#6DBE45]/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -161,8 +184,29 @@ export default function TablesPage() {
                   <h3 className="mb-3 text-center text-sm font-bold text-slate-900 sm:text-base">
                     {table.table_number}
                   </h3>
+                  {/* QR Image Display */}
                   {table.qr_code_url && table.qr_code_url !== 'generating...' ? (
-                    <QrCodeDisplay url={table.qr_code_url} tableName={table.table_number} />
+                    <div className="flex flex-col items-center">
+                      <QrCodeDisplay url={table.qr_code_url} tableName={table.table_number} />
+                      
+                      {/* View & Download Buttons for QR */}
+                      <div className="mt-3 grid w-full grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTableForModal(table)}
+                          className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadQR(table.qr_code_url as string, table.table_number)}
+                          className="flex items-center justify-center gap-1.5 rounded-lg bg-[#6DBE45]/10 py-2 text-xs font-semibold text-[#6DBE45] transition-colors hover:bg-[#6DBE45] hover:text-white"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex h-28 items-center justify-center text-slate-400">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-[#6DBE45]" />
@@ -191,6 +235,12 @@ export default function TablesPage() {
           )}
         </section>
       </div>
+      <QRModal 
+        isOpen={!!selectedTableForModal} 
+        onClose={() => setSelectedTableForModal(null)} 
+        qrUrl={selectedTableForModal?.qr_code_url || ''} 
+        tableNumber={Number(selectedTableForModal?.table_number)} 
+      />
     </div>
   );
 }

@@ -4,12 +4,15 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { Download, Eye, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import QRModal from '@/components/QRModal';
 
 interface Table {
   id: string;
   table_number: string;
+  qr_url: string;
+  restaurant_id: string;
 }
 
 const inputClass =
@@ -24,20 +27,25 @@ export default function EditTablePage() {
   const [tableNumber, setTableNumber] = useState('');
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [url, setUrl] = useState<string>();
 
   useEffect(() => {
     if (!tableId) return;
 
     const fetchTable = async () => {
       setLoading(true);
-      const { data, error } = await supabase.from('tables').select('id, table_number').eq('id', tableId).single();
+      const { data, error } = await supabase.from('tables').select('id, table_number, restaurant_id').eq('id', tableId).single();
 
       if (error || !data) {
         toast.error('Could not find the specified table.');
         router.push('/dashboard/tables');
       } else {
-        setTable(data as Table);
-        setTableNumber(data.table_number);
+        const tableData = data as Table;
+        setTable(tableData);
+        setTableNumber(String(tableData.table_number));
+        setUrl(tableData.qr_url);
       }
       setLoading(false);
     };
@@ -47,24 +55,75 @@ export default function EditTablePage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
     if (!tableNumber.trim()) {
       toast.error('Table name cannot be empty.');
       return;
     }
+
+    if (tableNumber == table?.table_number) {
+      toast.success('No changes made.');
+      router.push('/dashboard/tables');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('tables').update({ table_number: tableNumber }).eq('id', tableId);
+      // Call our secure backend to update the table AND regenerate the QR code
+      const res = await fetch('/api/update-table', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId: table?.id,
+          newTableNumber: Number(tableNumber),
+          restaurantId: table?.restaurant_id,
+        }),
+      });
 
-      if (error) throw error;
+      if (!res.ok) {
+        const errorData = await res.json();
+        // Handle the 409 Conflict for duplicate tables
+        if (res.status === 409 || errorData.error?.includes('already exists')) {
+          throw new Error(`Table ${tableNumber} already exists.`);
+        }
+        throw new Error(errorData.error || 'Failed to update table');
+      }
 
-      toast.success('Table updated successfully!');
-      router.push('/dashboard/tables');
-      router.refresh();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Update failed';
-      toast.error(`Update failed: ${errorMessage}`);
+      const { qrCodeUrl } = await res.json();
+      
+      setUrl(qrCodeUrl);
+      toast.success('Table updated & new QR generated!');
+      // router.push('/dashboard/tables');
+      // router.refresh();
+
+    } catch (error: any) {
+      console.error("Failed to update table:", error);
+      if (error.message?.includes('already exists')) {
+        setErrorMsg(error.message);
+      } else {
+        setErrorMsg('Something went wrong updating the table.');
+      }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDownloadQR = async (downloadUrl: string) => {
+    try {
+      const response = await fetch(downloadUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `table-${tableNumber}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      toast.error("Failed to download the image.");
     }
   };
 
@@ -118,6 +177,7 @@ export default function EditTablePage() {
             placeholder="e.g. 12 or Patio 4"
             required
           />
+          {errorMsg && <p className="mt-2 text-sm text-red-500">{errorMsg}</p>}
         </div>
         <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:justify-end">
           <button
@@ -137,6 +197,36 @@ export default function EditTablePage() {
           </button>
         </div>
       </form>
+    {/* View & Download QR Buttons */}
+      {url && (
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#6DBE45]/30 bg-white py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-slate-50"
+          >
+            <Eye className="h-4 w-4" />
+            View QR
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => handleDownloadQR(url)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#6DBE45]/10 py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-[#6DBE45] hover:text-white"
+          >
+            <Download className="h-4 w-4" />
+            Download
+          </button>
+        </div>
+      )}
+
+      {/* Reusable Modal Component */}
+      <QRModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        qrUrl={url || ''} 
+        tableNumber={Number(tableNumber)} 
+      />
     </div>
   );
 }

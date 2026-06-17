@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateQR } from '@/lib/api/generateQR';
 import { supabase } from '@/lib/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { Download, Eye, Loader2 } from 'lucide-react';
+import QRModal from '@/components/QRModal';
 
 type Restaurant = {
   id: string;
@@ -30,7 +31,8 @@ export default function AddTablePage() {
   const [tableNumber, setTableNumber] = useState<number>();
   const [url, setUrl] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -55,7 +57,9 @@ export default function AddTablePage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true); // Disable the button while it works
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    setUrl(undefined);
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -67,53 +71,55 @@ export default function AddTablePage() {
     const restaurantId = restaurant?.id;
     
     if (!restaurantSlug || !restaurantId) {
+      setErrorMsg("Restaurant details not found.");
       setIsSubmitting(false);
       return;
     }
 
     try {
-      // Step 1: Create the blank table in the database FIRST
-      const { error: rpcError } = await supabase.rpc('create_table_with_qr', {
-        restaurant_uuid: restaurantId,
-        table_num: num,
-      });
       
-      if (rpcError) throw rpcError;
+      const response = await generateQR(restaurantSlug,restaurantId, num);
 
-      // Step 2: Trigger the Edge Function
-      const response = await generateQR(restaurantSlug, num);
-      
-      // Step 3: Safely extract the exact URL string, no matter how generateQR returns it
-
-      console.log("Response is", response);
       if (response) {
         // If it returns the full API object
         setUrl(response);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create table:", error);
-      alert("Something went wrong creating the table.");
+      
+      // Look for the specific text we passed from the backend error message
+      if (error.message?.includes('already exists')) {
+        setErrorMsg(error.message.replace('Failed to generate QR: ', '')); 
+        // This will cleanly display: "Table 4 already exists."
+      } else {
+        setErrorMsg("Something went wrong generating the QR code.");
+      }
     } finally {
-      // Step 4: Turn off the loading state so the button resets
       setIsSubmitting(false);
     }
   };
 
-  const handleDownloadQR = (downloadUrl: string) => {
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `table-${tableNumber}.png`;
-    link.click();
+  const handleDownloadQR = async (downloadUrl: string) => {
+    try {
+      // Fetching as blob ensures it downloads rather than opening in a new tab
+      const response = await fetch(downloadUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `table-${tableNumber}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to download the image. Please try again.");
+    }
   };
 
-  if (loading || isSubmitting) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-[#6DBE45]" aria-hidden />
-      </div>
-    );
-  }
 
   return (
     <div className="mx-auto max-w-lg font-sans text-slate-800 selection:bg-[#6DBE45] selection:text-white">
@@ -156,7 +162,9 @@ export default function AddTablePage() {
             placeholder="e.g. 4"
             required
           />
+          {errorMsg && <p className="mt-2 text-sm text-red-500">{errorMsg}</p>}
         </div>
+
         <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:justify-end">
           <button
             type="button"
@@ -175,14 +183,34 @@ export default function AddTablePage() {
         </div>
       </form>
       {url && (
-        <button
-          type="button"
-          onClick={() => handleDownloadQR(url)}
-          className="mt-4 w-full rounded-xl border border-[#6DBE45]/30 bg-[#6DBE45]/10 py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-[#6DBE45] hover:text-white"
-        >
-          Download QR
-        </button>
+        <div className="mt-6 flex gap-3">
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#6DBE45]/30 bg-white py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-slate-50"
+          >
+            <Eye className="h-4 w-4" />
+            View QR
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => handleDownloadQR(url)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#6DBE45]/10 py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-[#6DBE45] hover:text-white"
+          >
+            <Download className="h-4 w-4" />
+            Download
+          </button>
+        </div>
       )}
+
+      {/* Reusable Modal Component */}
+      <QRModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        qrUrl={url || ''} 
+        tableNumber={tableNumber} 
+      />
     </div>
   );
 }
