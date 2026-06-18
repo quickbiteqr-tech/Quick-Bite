@@ -34,6 +34,7 @@ export async function middleware(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
+    // ─── Existing: protect /dashboard and /get-website ───
     const requiresAuth = pathname.startsWith('/dashboard') || pathname.startsWith('/get-website');
 
     if (requiresAuth && !user) {
@@ -44,6 +45,36 @@ export async function middleware(request: NextRequest) {
         redirectResponse.cookies.set(cookie.name, cookie.value);
       });
       return redirectResponse;
+    }
+
+    // ─── NEW: protect /admin/* (except /admin/login) ───
+    const isAdminRoute = pathname.startsWith('/admin');
+    const isAdminLogin = pathname === '/admin/login';
+
+    if (isAdminRoute && !isAdminLogin) {
+      // 1. Must be authenticated
+      if (!user) {
+        const redirectResponse = NextResponse.redirect(new URL('/admin/login', request.url));
+        response.cookies.getAll().forEach((cookie) => {
+          redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
+      }
+
+      // 2. Must exist in the admins table
+      const { data: admin } = await supabase
+        .from('admins')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+      if (!admin) {
+        const redirectResponse = NextResponse.redirect(new URL('/admin/login', request.url));
+        response.cookies.getAll().forEach((cookie) => {
+          redirectResponse.cookies.set(cookie.name, cookie.value);
+        });
+        return redirectResponse;
+      }
     }
   } catch (error) {
     console.warn('⚠️ Error in middleware Supabase client:', error);
