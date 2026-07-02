@@ -156,6 +156,7 @@ export async function PUT(
       category?: string | null;
       available?: boolean;
       photo_url?: string | null;
+      is_veg?: boolean;
     } = {};
     
     // Only update fields that are explicitly provided
@@ -168,10 +169,9 @@ export async function PUT(
     }
     if (body.available !== undefined) updateData.available = body.available;
     if (body.photo_url !== undefined) updateData.photo_url = body.photo_url || null;
+    if (body.is_veg !== undefined) updateData.is_veg = body.is_veg;
 
-    console.log("Update data to be sent:", updateData);
 
-    console.log("Updating menu item with ID:", parsedId, "Type:", typeof parsedId);
     const { data, error } = await supabase
       .from("menu_items")
       .update(updateData)
@@ -199,7 +199,6 @@ export async function PUT(
       }, { status: 400 });
     }
 
-    console.log("PUT successful, updated data:", data);
 
     if (!data) {
       return NextResponse.json({ error: "Menu item not found or update failed" }, { status: 404 });

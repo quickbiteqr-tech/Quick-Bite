@@ -244,6 +244,7 @@ export default function MenuPage() {
                                 Add dishes, set prices, and keep your QR menu up to date.
                             </p>
                         </div>
+                        <div className="flex flex-row gap-2">
                         <Link
                             href="/dashboard/menu/add"
                             className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#6DBE45] px-5 py-3 text-sm font-bold text-white shadow-[0_8px_20px_rgba(109,190,69,0.25)] transition-all hover:bg-[#5aa337] sm:px-6"
@@ -260,6 +261,7 @@ export default function MenuPage() {
                         >
                             Add Category
                         </button>
+                        </div>
                     </div>
                 </div>
 

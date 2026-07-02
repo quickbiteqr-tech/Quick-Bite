@@ -38,6 +38,7 @@ export async function POST(req: Request) {
         category: normalizedCategory,
         available: body.available ?? true,
         photo_url: body.photo_url ?? null,
+        is_veg: body.is_veg ?? true,
       },
     ])
     .select()
