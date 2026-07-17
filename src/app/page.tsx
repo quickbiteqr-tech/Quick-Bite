@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { Instagram, Linkedin, UserCircle2, X, Loader2 } from 'lucide-react';
+import { Instagram, Linkedin, UserCircle2, X, Loader2, Youtube } from 'lucide-react';
 import ContactModal from '@/components/ContactModal';
 import HelpModal from '@/components/HelpModal';
 import { supabase } from '@/lib/supabase/client';
@@ -105,7 +105,7 @@ const AnimatedPhoneMockup = () => {
 };
 
 export default function Home() {
-  const WHATSAPP_NUMBER = '919999999999';
+  const WHATSAPP_NUMBER = '917099239475';
   const whatsappHref = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent('Hi QuickBiteQR, I want to know more about your platform.')}`;
 
   const [scrolled, setScrolled] = useState(false);
@@ -805,7 +805,7 @@ export default function Home() {
                 <Linkedin className="h-5 w-5" />
               </Link>
               <Link
-                href="https://www.instagram.com/quickbiteqr/"
+                href="https://www.instagram.com/quickbite_qr"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-[#6DBE45]"
@@ -813,6 +813,16 @@ export default function Home() {
                 title="Instagram"
               >
                 <Instagram className="h-5 w-5" />
+              </Link>
+              <Link
+                href="https://www.youtube.com/@quickbiteqr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-[#6DBE45]"
+                aria-label="QuickBiteQR on Youtube"
+                title="Youtube"
+              >
+                <Youtube className="h-5 w-5" />
               </Link>
             </div>
 
