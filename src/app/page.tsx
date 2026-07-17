@@ -218,7 +218,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-800 selection:bg-[#6DBE45] selection:text-white overflow-x-hidden">
-      {isSignupGateOpen && (
+      {/* {isSignupGateOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-2xl overflow-hidden bg-white shadow-2xl ring-1 ring-black/5">
             <div className="bg-gradient-to-r from-[#6DBE45]/15 via-[#6DBE45]/8 to-transparent px-6 pb-4 pt-6 sm:px-8 sm:pt-8">
@@ -295,7 +295,7 @@ export default function Home() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Modals */}
       <ContactModal isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
