@@ -29,7 +29,7 @@ export const signUpWithRestaurant = async (formData: SignUpData) => {
     });
 
     if (error) {
-      console.error('Signup failed:', error.message);
+      console.error('Signup failed:', error);
 
       // Provide more user-friendly errors
       if (error.message.includes('duplicate')) {

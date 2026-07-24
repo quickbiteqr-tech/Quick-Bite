@@ -6,8 +6,28 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { loginWithEmail } from '@/lib/auth/login';
 import { signUpWithRestaurant, SignUpData } from '@/lib/auth/signup';
 import { getSafeReturnPath } from '@/lib/auth/return-path';
-import { isSupabaseConfigured } from '@/lib/supabase/client';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase/client';
+import { ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+const signUpSchema = z.object({
+  owner_name: z.string().min(1, 'Owner Name is required'),
+  restaurant_name: z.string().min(1, 'Restaurant Name is required'),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  phone: z.string().min(10, 'Phone number must be at least 10 characters'),
+  address: z.string().min(1, 'Address is required'),
+});
+
+type LoginSchema = z.infer<typeof loginSchema>;
+type SignUpSchema = z.infer<typeof signUpSchema>;
 
 interface AuthSliderProps {
   defaultMode?: 'login' | 'signup';
@@ -16,6 +36,7 @@ interface AuthSliderProps {
 export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
   const configError =
     'App configuration is incomplete. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local, then restart the dev server.';
+  
   const [isSignup, setIsSignup] = useState(defaultMode === 'signup');
   const [isOffline, setIsOffline] = useState(false);
   const router = useRouter();
@@ -25,24 +46,39 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
     [searchParams]
   );
 
-  // State for Login
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  // States for password visibility
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
-  // State for Signup
-  const [signUpData, setSignUpData] = useState<SignUpData>({
-    email: '',
-    password: '',
-    owner_name: '',
-    restaurant_name: '',
-    phone: '',
-    address: '',
-  });
-  const [isSignUpSubmitting, setIsSignUpSubmitting] = useState(false);
-  const [signUpError, setSignUpError] = useState<string | null>(null);
+  // State for Restaurant Name check
+  const [nameStatus, setNameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+
+  // React Hook Form for Login
+  const {
+    register: registerLogin,
+    handleSubmit: handleSubmitLogin,
+    formState: { errors: errorsLogin, isSubmitting: isLoginSubmitting },
+    setError: setErrorLogin,
+    watch: watchLogin,
+  } = useForm<LoginSchema>({
+    resolver: zodResolver(loginSchema),
+  });
+  const loginFormValues = watchLogin();
+
+  // React Hook Form for SignUp
+  const {
+    register: registerSignUp,
+    handleSubmit: handleSubmitSignUp,
+    formState: { errors: errorsSignUp, isSubmitting: isSignUpSubmitting },
+    setError: setErrorSignUp,
+    clearErrors: clearErrorsSignUp,
+    getValues: getValuesSignUp,
+    watch: watchSignUp,
+  } = useForm<SignUpSchema>({
+    resolver: zodResolver(signUpSchema),
+  });
+  const signUpFormValues = watchSignUp();
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -56,39 +92,49 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
     };
   }, []);
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onLoginSubmit = async (data: LoginSchema) => {
     if (!isSupabaseConfigured) {
-      setLoginError(configError);
+      setErrorLogin('root', { message: configError });
       return;
     }
     if (isOffline) return;
-    setLoginError(null);
-    setIsLoginSubmitting(true);
-    const { error } = await loginWithEmail(loginEmail, loginPassword);
+    
+    const { error } = await loginWithEmail(data.email, data.password);
     if (error) {
-      setLoginError(error);
-      setIsLoginSubmitting(false);
+      if (error.toLowerCase().includes('password')) {
+        setErrorLogin('password', { message: error });
+      } else if (error.toLowerCase().includes('email') || error.toLowerCase().includes('user')) {
+        setErrorLogin('email', { message: error });
+      } else {
+        setErrorLogin('root', { message: error });
+      }
     } else {
       router.replace(returnTo);
     }
   };
 
-  const handleSignUpChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setSignUpData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSignUpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSignUpSubmit = async (data: SignUpSchema) => {
     if (!isSupabaseConfigured) {
-      setSignUpError(configError);
+      setErrorSignUp('root', { message: configError });
       return;
     }
     if (isOffline) return;
-    setSignUpError(null);
-    setIsSignUpSubmitting(true);
+    
+    if (nameStatus !== 'available') {
+      setErrorSignUp('restaurant_name', { message: 'Please check restaurant name availability first' });
+      return;
+    }
+
     try {
+      const signUpData: SignUpData = {
+        email: data.email,
+        password: data.password,
+        owner_name: data.owner_name,
+        restaurant_name: data.restaurant_name,
+        phone: data.phone,
+        address: data.address
+      };
+      
       const { session } = await signUpWithRestaurant(signUpData);
       if (session) {
         router.replace(returnTo);
@@ -97,9 +143,67 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
       setSignUpSuccess(true);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setSignUpError(errorMessage);
-    } finally {
-      setIsSignUpSubmitting(false);
+      if (errorMessage.toLowerCase().includes('email') || errorMessage.toLowerCase().includes('already registered')) {
+         setErrorSignUp('email', { message: errorMessage });
+      } else {
+         setErrorSignUp('root', { message: errorMessage });
+      }
+    }
+  };
+
+  const handleCheckAvailability = async () => {
+    const rawName = getValuesSignUp('restaurant_name');
+    if (!rawName) {
+      setErrorSignUp('restaurant_name', { message: 'Restaurant Name is required to check' });
+      return;
+    }
+    setNameStatus('checking');
+
+    try {
+      const generatedSlug = rawName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+      if (!generatedSlug) {
+        setErrorSignUp('restaurant_name', { message: 'Please enter a valid name' });
+        setNameStatus('idle');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('slug', generatedSlug)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking availability:', error);
+        setErrorSignUp('root', { message: 'Failed to check name availability. Please try again.' });
+        setNameStatus('idle');
+        return;
+      }
+
+      if (data) {
+        setNameStatus('taken');
+        setErrorSignUp('restaurant_name', { message: 'This name is already registered. Please choose another.' });
+      } else {
+        setNameStatus('available');
+        clearErrorsSignUp('restaurant_name');
+      }
+    } catch (err) {
+      console.error('Unexpected error checking availability:', err);
+      setErrorSignUp('root', { message: 'An unexpected error occurred. Please try again.' });
+      setNameStatus('idle');
+    }
+  };
+
+  const { onChange: origRestaurantNameChange, ...restRestaurantNameReg } = registerSignUp('restaurant_name');
+  const handleRestaurantNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    origRestaurantNameChange(e);
+    if (nameStatus === 'available' || nameStatus === 'taken') {
+      setNameStatus('idle');
+      clearErrorsSignUp('restaurant_name');
     }
   };
 
@@ -115,6 +219,14 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
       return;
     }
     router.push('/');
+  };
+
+  const getInputClasses = (error?: any, isDesktop = false, extraClasses = '') => {
+    const base = `w-full transition-all placeholder:text-gray-400 focus:outline-none ${isDesktop ? 'px-4 py-2.5 text-sm rounded-lg' : 'px-4 py-3 rounded-lg'}`;
+    const status = error 
+      ? 'ring-2 ring-red-500 bg-red-50' 
+      : 'bg-gray-100 focus:ring-2 focus:ring-[#6DBE45]/50';
+    return `${base} ${status} ${extraClasses}`;
   };
 
   return (
@@ -146,7 +258,6 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
             MOBILE VIEW (stacked / conditional rendering)
             ========================================= */}
         <div className="md:hidden flex-1 overflow-y-auto">
-          {/* We just toggle between the two forms on mobile without fancy physical sliding */}
           {isSignup ? (
             <div className="p-8 w-full">
               {signUpSuccess ? (
@@ -158,17 +269,114 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
               ) : (
                 <>
                   <h2 className="text-3xl font-bold text-center text-[#6DBE45] mb-6">Create Account</h2>
-                  <form onSubmit={handleSignUpSubmit} className="space-y-4">
-                    <input name="owner_name" type="text" placeholder="Owner's Name" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
-                    <input name="restaurant_name" type="text" placeholder="Restaurant Name" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
-                    <input name="email" type="email" placeholder="Email" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
-                    <input name="password" type="password" placeholder="Password" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
-                    <input name="phone" type="tel" placeholder="Phone Number" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
-                    <input name="address" type="text" placeholder="Address" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
+                  <form onSubmit={handleSubmitSignUp(onSignUpSubmit)} className="space-y-4">
+                    <div>
+                      <input 
+                        {...registerSignUp('owner_name')} 
+                        
+                        type="text" 
+                        placeholder="Owner's Name" 
+                        aria-invalid={!!errorsSignUp.owner_name}
+                        className={getInputClasses(errorsSignUp.owner_name, false)} 
+                      />
+                      {errorsSignUp.owner_name && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.owner_name.message}</p>}
+                    </div>
                     
-                    {signUpError && <p className="text-red-500 text-sm text-center">{signUpError}</p>}
+                    <div>
+                      <div className="relative w-full">
+                        <input 
+                          {...restRestaurantNameReg}
+                          onChange={handleRestaurantNameChange}
+                          
+                          type="text" 
+                          placeholder="Restaurant Name" 
+                          aria-invalid={!!errorsSignUp.restaurant_name}
+                          className={getInputClasses(errorsSignUp.restaurant_name, false, 'pr-20')} 
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 p-1 rounded-md backdrop-blur-sm">
+                          {nameStatus === 'available' && <span className="text-xs text-green-600 font-bold hidden sm:inline">✓ Available</span>}
+                          {nameStatus === 'taken' && <span className="text-xs text-red-600 font-bold hidden sm:inline">✗ Taken</span>}
+                          <button
+                            type="button"
+                            onClick={handleCheckAvailability}
+                            disabled={nameStatus === 'checking' || !signUpFormValues.restaurant_name}
+                            className={`text-xs px-2 py-1 rounded-md font-semibold transition-colors ${
+                              nameStatus === 'checking' || !signUpFormValues.restaurant_name
+                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                : 'bg-[#6DBE45] text-white hover:bg-[#5aa337]'
+                            }`}
+                          >
+                            {nameStatus === 'checking' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Check'}
+                          </button>
+                        </div>
+                      </div>
+                      {errorsSignUp.restaurant_name && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.restaurant_name.message}</p>}
+                    </div>
+
+                    <div>
+                      <input 
+                        {...registerSignUp('email')} 
+                        
+                        type="email" 
+                        placeholder="Email" 
+                        aria-invalid={!!errorsSignUp.email}
+                        className={getInputClasses(errorsSignUp.email, false)} 
+                      />
+                      {errorsSignUp.email && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.email.message}</p>}
+                    </div>
+
+                    <div>
+                      <div className="relative w-full">
+                        <input 
+                          {...registerSignUp('password')} 
+                          
+                          type={showSignUpPassword ? 'text' : 'password'} 
+                          placeholder="Password" 
+                          aria-invalid={!!errorsSignUp.password}
+                          className={getInputClasses(errorsSignUp.password, false, 'pr-10')} 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        >
+                          {showSignUpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      {errorsSignUp.password && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.password.message}</p>}
+                    </div>
+
+                    <div>
+                      <input 
+                        {...registerSignUp('phone')} 
+                        
+                        type="tel" 
+                        placeholder="Phone Number" 
+                        aria-invalid={!!errorsSignUp.phone}
+                        className={getInputClasses(errorsSignUp.phone, false)} 
+                      />
+                      {errorsSignUp.phone && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.phone.message}</p>}
+                    </div>
+
+                    <div>
+                      <input 
+                        {...registerSignUp('address')} 
+                        
+                        type="text" 
+                        placeholder="Address" 
+                        aria-invalid={!!errorsSignUp.address}
+                        className={getInputClasses(errorsSignUp.address, false)} 
+                      />
+                      {errorsSignUp.address && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.address.message}</p>}
+                    </div>
                     
-                    <button type="submit" disabled={isSignUpSubmitting || !isSupabaseConfigured} className="w-full bg-[#6DBE45] text-white rounded-full py-3 font-semibold uppercase tracking-wide hover:bg-[#5aa337] transition-colors flex justify-center items-center disabled:opacity-60 disabled:cursor-not-allowed">
+                    {errorsSignUp.root && <p className="text-red-500 text-sm text-center">{errorsSignUp.root.message}</p>}
+                    
+                    <button 
+                      type="submit" 
+                      disabled={isSignUpSubmitting || !isSupabaseConfigured || nameStatus !== 'available'} 
+                      className="w-full bg-[#6DBE45] text-white rounded-full py-3 font-semibold uppercase tracking-wide hover:bg-[#5aa337] transition-colors flex justify-center items-center disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
                       {isSignUpSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Sign Up
                     </button>
@@ -182,11 +390,41 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
           ) : (
             <div className="p-8 w-full min-h-full flex flex-col justify-center">
               <h2 className="text-3xl font-bold text-center text-[#6DBE45] mb-6">Sign in to QuickBiteQR</h2>
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <input type="email" placeholder="Email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
-                <input type="password" placeholder="Password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
+              <form onSubmit={handleSubmitLogin(onLoginSubmit)} className="space-y-4">
+                <div>
+                  <input 
+                    {...registerLogin('email')} 
+                     
+                    type="email" 
+                    placeholder="Email" 
+                    aria-invalid={!!errorsLogin.email}
+                    className={getInputClasses(errorsLogin.email, false)} 
+                  />
+                  {errorsLogin.email && <p className="text-red-500 text-xs mt-1 text-left">{errorsLogin.email.message}</p>}
+                </div>
+
+                <div>
+                  <div className="relative w-full">
+                    <input 
+                      {...registerLogin('password')} 
+                       
+                      type={showLoginPassword ? 'text' : 'password'} 
+                      placeholder="Password" 
+                      aria-invalid={!!errorsLogin.password}
+                      className={getInputClasses(errorsLogin.password, false, 'pr-10')} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                    >
+                      {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errorsLogin.password && <p className="text-red-500 text-xs mt-1 text-left">{errorsLogin.password.message}</p>}
+                </div>
                 
-                {loginError && <p className="text-red-500 text-sm text-center">{loginError}</p>}
+                {errorsLogin.root && <p className="text-red-500 text-sm text-center">{errorsLogin.root.message}</p>}
                 
                 <div className="flex justify-center mt-2">
                    <button type="button" className="text-gray-500 text-sm hover:text-[#6DBE45] hover:underline mb-4 border-b border-transparent">Forgot your password?</button>
@@ -212,13 +450,41 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
           {/* SIGN IN FORM (STATIC ON LEFT) */}
           <div className="absolute top-0 left-0 w-1/2 h-full bg-white flex flex-col justify-center items-center p-12 transition-all duration-700">
              <h2 className="text-4xl font-bold text-[#6DBE45] mb-4">Sign in</h2>
-             <form onSubmit={handleLoginSubmit} className="w-full max-w-sm flex flex-col space-y-4">
-                <input type="email" placeholder="Email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
-                <input type="password" placeholder="Password" required value={loginPassword} onChange={e => setLoginPassword(e.target.value)} className="w-full bg-gray-100 px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 transition-all placeholder:text-gray-400" />
+             <form onSubmit={handleSubmitLogin(onLoginSubmit)} className="w-full max-w-sm flex flex-col space-y-4">
+                <div>
+                  <input 
+                    {...registerLogin('email')} 
+                     
+                    type="email" 
+                    placeholder="Email" 
+                    aria-invalid={!!errorsLogin.email}
+                    className={getInputClasses(errorsLogin.email, true)} 
+                  />
+                  {errorsLogin.email && <p className="text-red-500 text-xs mt-1 text-left">{errorsLogin.email.message}</p>}
+                </div>
+
+                <div>
+                  <div className="relative w-full">
+                    <input 
+                      {...registerLogin('password')} 
+                       
+                      type={showLoginPassword ? 'text' : 'password'} 
+                      placeholder="Password" 
+                      aria-invalid={!!errorsLogin.password}
+                      className={getInputClasses(errorsLogin.password, true, 'pr-10')} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                    >
+                      {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errorsLogin.password && <p className="text-red-500 text-xs mt-1 text-left">{errorsLogin.password.message}</p>}
+                </div>
                 
-                {loginError && <p className="text-red-500 text-sm text-center">{loginError}</p>}
-                
-                {/* <button type="button" className="text-gray-500 text-sm hover:text-[#6DBE45] self-center my-2">Forgot your password?</button> */}
+                {errorsLogin.root && <p className="text-red-500 text-sm text-center">{errorsLogin.root.message}</p>}
                 
                 <button type="submit" disabled={isLoginSubmitting || !isSupabaseConfigured} className="bg-[#6DBE45] text-white rounded-full py-3.5 px-12 font-bold uppercase tracking-widest hover:bg-[#5aa337] transition-all self-center mt-4 disabled:opacity-60 disabled:cursor-not-allowed">
                   {isLoginSubmitting ? <Loader2 className="h-5 w-5 animate-spin inline" /> : 'Sign In'}
@@ -237,19 +503,115 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
             ) : (
              <>
                <h2 className="text-3xl font-bold text-[#6DBE45] mb-3">Create Account</h2>
-               <form onSubmit={handleSignUpSubmit} className="w-full max-w-sm flex flex-col space-y-3 pb-4">
+               <form onSubmit={handleSubmitSignUp(onSignUpSubmit)} className="w-full max-w-sm flex flex-col space-y-3 pb-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <input name="owner_name" type="text" placeholder="Owner's Name" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 placeholder:text-gray-400 text-sm" />
-                    <input name="restaurant_name" type="text" placeholder="Restaurant Name" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 placeholder:text-gray-400 text-sm" />
+                    <div>
+                      <input 
+                        {...registerSignUp('owner_name')} 
+                        
+                        type="text" 
+                        placeholder="Owner's Name" 
+                        aria-invalid={!!errorsSignUp.owner_name}
+                        className={getInputClasses(errorsSignUp.owner_name, true)} 
+                      />
+                      {errorsSignUp.owner_name && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.owner_name.message}</p>}
+                    </div>
+                    <div>
+                      <div className="relative w-full">
+                        <input 
+                          {...restRestaurantNameReg}
+                          onChange={handleRestaurantNameChange}
+                          
+                          type="text" 
+                          placeholder="Restaurant Name" 
+                          aria-invalid={!!errorsSignUp.restaurant_name}
+                          className={getInputClasses(errorsSignUp.restaurant_name, true, 'pr-16')} 
+                        />
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center bg-white/80 p-0.5 rounded-md backdrop-blur-sm">
+                          {nameStatus === 'available' && <span className="text-[10px] text-green-600 font-bold mr-1 hidden lg:inline">✓</span>}
+                          {nameStatus === 'taken' && <span className="text-[10px] text-red-600 font-bold mr-1 hidden lg:inline">✗</span>}
+                          <button
+                            type="button"
+                            onClick={handleCheckAvailability}
+                            disabled={nameStatus === 'checking' || !signUpFormValues.restaurant_name}
+                            className={`text-[10px] px-1.5 py-1 rounded-md font-semibold transition-colors ${
+                              nameStatus === 'checking' || !signUpFormValues.restaurant_name
+                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                : 'bg-[#6DBE45] text-white hover:bg-[#5aa337]'
+                            }`}
+                          >
+                            {nameStatus === 'checking' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Check'}
+                          </button>
+                        </div>
+                      </div>
+                      {errorsSignUp.restaurant_name && <p className="text-red-500 text-[10px] mt-1 text-left leading-tight">{errorsSignUp.restaurant_name.message}</p>}
+                    </div>
                   </div>
-                  <input name="email" type="email" placeholder="Email" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 placeholder:text-gray-400 text-sm" />
-                  <input name="password" type="password" placeholder="Password" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 placeholder:text-gray-400 text-sm" />
-                  <input name="phone" type="tel" placeholder="Phone Number" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 placeholder:text-gray-400 text-sm" />
-                  <input name="address" type="text" placeholder="Address" required onChange={handleSignUpChange} className="w-full bg-gray-100 px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/50 placeholder:text-gray-400 text-sm" />
                   
-                  {signUpError && <p className="text-red-500 text-sm text-center pt-2">{signUpError}</p>}
+                  <div>
+                    <input 
+                      {...registerSignUp('email')} 
+                      
+                      type="email" 
+                      placeholder="Email" 
+                      aria-invalid={!!errorsSignUp.email}
+                      className={getInputClasses(errorsSignUp.email, true)} 
+                    />
+                    {errorsSignUp.email && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.email.message}</p>}
+                  </div>
+
+                  <div>
+                    <div className="relative w-full">
+                      <input 
+                        {...registerSignUp('password')} 
+                        
+                        type={showSignUpPassword ? 'text' : 'password'} 
+                        placeholder="Password" 
+                        aria-invalid={!!errorsSignUp.password}
+                        className={getInputClasses(errorsSignUp.password, true, 'pr-10')} 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                      >
+                        {showSignUpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {errorsSignUp.password && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.password.message}</p>}
+                  </div>
+
+                  <div>
+                    <input 
+                      {...registerSignUp('phone')} 
+                      
+                      type="tel" 
+                      placeholder="Phone Number" 
+                      aria-invalid={!!errorsSignUp.phone}
+                      className={getInputClasses(errorsSignUp.phone, true)} 
+                    />
+                    {errorsSignUp.phone && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.phone.message}</p>}
+                  </div>
+
+                  <div>
+                    <input 
+                      {...registerSignUp('address')} 
+                      
+                      type="text" 
+                      placeholder="Address" 
+                      aria-invalid={!!errorsSignUp.address}
+                      className={getInputClasses(errorsSignUp.address, true)} 
+                    />
+                    {errorsSignUp.address && <p className="text-red-500 text-xs mt-1 text-left">{errorsSignUp.address.message}</p>}
+                  </div>
                   
-                  <button type="submit" disabled={isSignUpSubmitting || !isSupabaseConfigured} className="bg-[#6DBE45] text-white rounded-full py-3.5 px-12 font-bold uppercase tracking-widest hover:bg-[#5aa337] transition-all self-center mt-6 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {errorsSignUp.root && <p className="text-red-500 text-sm text-center pt-2">{errorsSignUp.root.message}</p>}
+                  
+                  <button 
+                    type="submit" 
+                    disabled={isSignUpSubmitting || !isSupabaseConfigured || nameStatus !== 'available'} 
+                    className="bg-[#6DBE45] text-white rounded-full py-3.5 px-12 font-bold uppercase tracking-widest hover:bg-[#5aa337] transition-all self-center mt-6 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
                     {isSignUpSubmitting ? <Loader2 className="h-5 w-5 animate-spin inline" /> : 'Sign Up'}
                   </button>
                </form>
@@ -258,10 +620,6 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
           </div>
 
           {/* OVERLAY PANEL (THE GREEN SLIDING PART) */}
-          {/* 
-              When isSignup is FALSE (we are logging in): The overlay should cover the RIGHT side (the sign up form), so we can see the Login form on the left.
-              When isSignup is TRUE (we are signing up): The overlay should cover the LEFT side (the login form), so we can see the Sign up form on the right.
-          */}
           <motion.div 
             className="absolute top-0 right-0 w-1/2 h-full z-50 bg-[#6DBE45] text-white overflow-hidden shadow-2xl flex items-center justify-center"
             initial={false}
@@ -319,3 +677,4 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
     </div>
   );
 }
+
