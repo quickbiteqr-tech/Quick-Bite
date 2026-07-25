@@ -26,8 +26,13 @@ const signUpSchema = z.object({
   address: z.string().min(1, 'Address is required'),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
 type LoginSchema = z.infer<typeof loginSchema>;
 type SignUpSchema = z.infer<typeof signUpSchema>;
+type ForgotPasswordSchema = z.infer<typeof forgotPasswordSchema>;
 
 interface AuthSliderProps {
   defaultMode?: 'login' | 'signup';
@@ -49,6 +54,34 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
   // States for password visibility
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+
+  // States for Forgot Password
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState(false);
+
+  // React Hook Form for Forgot Password
+  const {
+    register: registerForgotPassword,
+    handleSubmit: handleSubmitForgotPassword,
+    formState: { errors: errorsForgotPassword, isSubmitting: isForgotPasswordSubmitting },
+    setError: setErrorForgotPassword,
+  } = useForm<ForgotPasswordSchema>({
+    resolver: zodResolver(forgotPasswordSchema),
+  });
+
+  const onForgotPasswordSubmit = async (data: ForgotPasswordSchema) => {
+    if (!isSupabaseConfigured || isOffline) return;
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
+    });
+    
+    if (error && error.message.toLowerCase().includes('rate limit')) {
+      setErrorForgotPassword('root', { message: 'Too many requests. Please try again later.' });
+    } else {
+      setForgotPasswordSuccess(true);
+    }
+  };
 
   // State for Restaurant Name check
   const [nameStatus, setNameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
@@ -208,6 +241,7 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
   };
 
   const toggleMode = () => {
+    setIsForgotPassword(false);
     const query = searchParams?.toString() ?? '';
     const suffix = query ? `?${query}` : '';
     router.replace(`${isSignup ? '/login' : '/signup'}${suffix}`);
@@ -387,6 +421,39 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
                 </>
               )}
             </div>
+          ) : isForgotPassword ? (
+            <div className="p-8 w-full min-h-full flex flex-col justify-center">
+              <h2 className="text-3xl font-bold text-center text-[#6DBE45] mb-6">Reset Password</h2>
+              {forgotPasswordSuccess ? (
+                <div className="text-center">
+                  <p className="text-gray-600 mb-6">If an account exists for this email, a password reset link has been sent.</p>
+                  <button onClick={() => { setIsForgotPassword(false); setForgotPasswordSuccess(false); }} className="text-[#6DBE45] font-semibold hover:underline">Back to Login</button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitForgotPassword(onForgotPasswordSubmit)} className="space-y-4">
+                  <p className="text-gray-600 text-sm text-center mb-6">Enter your email address and we'll send you a link to reset your password.</p>
+                  <div>
+                    <input 
+                      {...registerForgotPassword('email')} 
+                      type="email" 
+                      placeholder="Email" 
+                      aria-invalid={!!errorsForgotPassword.email}
+                      className={getInputClasses(errorsForgotPassword.email, false)} 
+                    />
+                    {errorsForgotPassword.email && <p className="text-red-500 text-xs mt-1 text-left">{errorsForgotPassword.email.message}</p>}
+                  </div>
+                  {errorsForgotPassword.root && <p className="text-red-500 text-sm text-center">{errorsForgotPassword.root.message}</p>}
+                  
+                  <button type="submit" disabled={isForgotPasswordSubmitting || !isSupabaseConfigured} className="w-full bg-[#6DBE45] text-white rounded-full py-3 font-semibold uppercase tracking-wide hover:bg-[#5aa337] transition-colors flex justify-center items-center disabled:opacity-60 disabled:cursor-not-allowed">
+                    {isForgotPasswordSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Send Reset Link
+                  </button>
+                  <div className="mt-6 text-center">
+                    <button type="button" onClick={() => setIsForgotPassword(false)} className="text-gray-500 text-sm hover:text-[#6DBE45] hover:underline">Back to Login</button>
+                  </div>
+                </form>
+              )}
+            </div>
           ) : (
             <div className="p-8 w-full min-h-full flex flex-col justify-center">
               <h2 className="text-3xl font-bold text-center text-[#6DBE45] mb-6">Sign in to QuickBiteQR</h2>
@@ -427,7 +494,7 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
                 {errorsLogin.root && <p className="text-red-500 text-sm text-center">{errorsLogin.root.message}</p>}
                 
                 <div className="flex justify-center mt-2">
-                   <button type="button" className="text-gray-500 text-sm hover:text-[#6DBE45] hover:underline mb-4 border-b border-transparent">Forgot your password?</button>
+                   <button type="button" onClick={() => setIsForgotPassword(true)} className="text-gray-500 text-sm hover:text-[#6DBE45] hover:underline mb-4 border-b border-transparent">Forgot your password?</button>
                 </div>
 
                 <button type="submit" disabled={isLoginSubmitting || !isSupabaseConfigured} className="w-full bg-[#6DBE45] text-white rounded-full py-3 font-semibold uppercase tracking-wide hover:bg-[#5aa337] transition-colors flex justify-center items-center disabled:opacity-60 disabled:cursor-not-allowed">
@@ -449,8 +516,42 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
           
           {/* SIGN IN FORM (STATIC ON LEFT) */}
           <div className="absolute top-0 left-0 w-1/2 h-full bg-white flex flex-col justify-center items-center p-12 transition-all duration-700">
-             <h2 className="text-4xl font-bold text-[#6DBE45] mb-4">Sign in</h2>
-             <form onSubmit={handleSubmitLogin(onLoginSubmit)} className="w-full max-w-sm flex flex-col space-y-4">
+             {isForgotPassword ? (
+               <div className="w-full max-w-sm flex flex-col items-center">
+                 <h2 className="text-4xl font-bold text-[#6DBE45] mb-4">Reset Password</h2>
+                 {forgotPasswordSuccess ? (
+                   <div className="text-center">
+                     <p className="text-gray-600 mb-6">If an account exists for this email, a password reset link has been sent.</p>
+                     <button onClick={() => { setIsForgotPassword(false); setForgotPasswordSuccess(false); }} className="text-[#6DBE45] font-semibold hover:underline">Back to Login</button>
+                   </div>
+                 ) : (
+                   <form onSubmit={handleSubmitForgotPassword(onForgotPasswordSubmit)} className="w-full flex flex-col space-y-4">
+                     <p className="text-gray-600 text-sm text-center mb-4">Enter your email and we'll send you a link to reset your password.</p>
+                     <div>
+                       <input 
+                         {...registerForgotPassword('email')} 
+                         type="email" 
+                         placeholder="Email" 
+                         aria-invalid={!!errorsForgotPassword.email}
+                         className={getInputClasses(errorsForgotPassword.email, true)} 
+                       />
+                       {errorsForgotPassword.email && <p className="text-red-500 text-xs mt-1 text-left">{errorsForgotPassword.email.message}</p>}
+                     </div>
+                     {errorsForgotPassword.root && <p className="text-red-500 text-sm text-center">{errorsForgotPassword.root.message}</p>}
+                     
+                     <button type="submit" disabled={isForgotPasswordSubmitting || !isSupabaseConfigured} className="bg-[#6DBE45] text-white rounded-full py-3.5 px-12 font-bold uppercase tracking-widest hover:bg-[#5aa337] transition-all self-center mt-4 disabled:opacity-60 disabled:cursor-not-allowed">
+                       {isForgotPasswordSubmitting ? <Loader2 className="h-5 w-5 animate-spin inline" /> : 'Send Link'}
+                     </button>
+                     <div className="mt-6 text-center">
+                       <button type="button" onClick={() => setIsForgotPassword(false)} className="text-gray-500 text-sm hover:text-[#6DBE45] hover:underline">Back to Login</button>
+                     </div>
+                   </form>
+                 )}
+               </div>
+             ) : (
+               <>
+                 <h2 className="text-4xl font-bold text-[#6DBE45] mb-4">Sign in</h2>
+                 <form onSubmit={handleSubmitLogin(onLoginSubmit)} className="w-full max-w-sm flex flex-col space-y-4">
                 <div>
                   <input 
                     {...registerLogin('email')} 
@@ -486,10 +587,16 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
                 
                 {errorsLogin.root && <p className="text-red-500 text-sm text-center">{errorsLogin.root.message}</p>}
                 
+                <div className="flex justify-center w-full mt-2">
+                  <button type="button" onClick={() => setIsForgotPassword(true)} className="text-gray-500 text-sm hover:text-[#6DBE45] hover:underline border-b border-transparent text-center">Forgot your password?</button>
+                </div>
+                
                 <button type="submit" disabled={isLoginSubmitting || !isSupabaseConfigured} className="bg-[#6DBE45] text-white rounded-full py-3.5 px-12 font-bold uppercase tracking-widest hover:bg-[#5aa337] transition-all self-center mt-4 disabled:opacity-60 disabled:cursor-not-allowed">
                   {isLoginSubmitting ? <Loader2 className="h-5 w-5 animate-spin inline" /> : 'Sign In'}
                 </button>
              </form>
+             </>
+             )}
           </div>
 
           {/* SIGN UP FORM (STATIC ON RIGHT) */}
