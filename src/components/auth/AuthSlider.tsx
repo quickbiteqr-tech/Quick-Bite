@@ -256,7 +256,7 @@ export default function AuthSlider({ defaultMode = 'login' }: AuthSliderProps) {
   };
 
   const getInputClasses = (error?: any, isDesktop = false, extraClasses = '') => {
-    const base = `w-full transition-all placeholder:text-gray-400 focus:outline-none ${isDesktop ? 'px-4 py-2.5 text-sm rounded-lg' : 'px-4 py-3 rounded-lg'}`;
+   const base = `w-full text-gray-900 transition-all placeholder:text-gray-400 focus:outline-none ${isDesktop ? 'px-4 py-2.5 text-sm rounded-lg' : 'px-4 py-3 text-base rounded-lg'}`;
     const status = error 
       ? 'ring-2 ring-red-500 bg-red-50' 
       : 'bg-gray-100 focus:ring-2 focus:ring-[#6DBE45]/50';
