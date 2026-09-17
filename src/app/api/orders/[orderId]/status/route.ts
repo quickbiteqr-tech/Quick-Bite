@@ -22,6 +22,16 @@ const CLIENT_TO_DB_STATUS: Record<string, string> = {
   cancelled: "cancelled",
 };
 
+// State Machine Enforcement (H-08)
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  pending: ["confirmed", "preparing", "cancelled"],
+  confirmed: ["preparing", "ready", "cancelled"],
+  preparing: ["ready", "cancelled"],
+  ready: ["complete"],
+  complete: [], // Terminal state
+  cancelled: [], // Terminal state
+};
+
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ orderId?: string }> }
@@ -97,6 +107,18 @@ export async function PUT(
           error: `Unknown status value: ${incomingStatus}. Valid values are: pending, confirmed, preparing, ready, complete, cancelled` 
         }, { status: 400 });
       }
+
+      // H-08: Enforce Strict State Machine
+      const currentStatus = orderRow.status;
+      if (mapped !== currentStatus) {
+        const allowedNextStates = ALLOWED_TRANSITIONS[currentStatus] || [];
+        if (!allowedNextStates.includes(mapped)) {
+          return NextResponse.json({ 
+            error: `Invalid status transition from '${currentStatus}' to '${mapped}'.` 
+          }, { status: 400 });
+        }
+      }
+
       updatePayload.status = mapped;
     }
 

@@ -5,7 +5,7 @@ import { z } from "zod";
 const cartItemSchema = z.object({
   id: z.string().uuid("Invalid menu item ID"),
   quantity: z.number().int().positive("Quantity must be greater than 0"),
-  price: z.number().optional(), // Ignored by the server
+  price: z.number().nonnegative("Price cannot be negative").optional(), // Ignored by the server
 });
 
 const orderSchema = z.object({
