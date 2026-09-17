@@ -30,6 +30,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
   const isMountedRef = useRef(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isProcessingRef = useRef(false); // Prevent multiple clicks
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -99,6 +100,11 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
       return;
     }
 
+    // Initialize idempotency key for this checkout attempt if not already set
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = crypto.randomUUID();
+    }
+
     // Set processing flag immediately to prevent double clicks
     isProcessingRef.current = true;
     setIsLoading('table');
@@ -110,6 +116,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
         restaurantId,
         tableNumber,
         totalAmount: totalPrice(),
+        idempotencyKey: idempotencyKeyRef.current,
       });
 
       if (data?.success && data?.trackCode) {
