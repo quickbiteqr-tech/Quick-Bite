@@ -34,7 +34,7 @@ function getStatusColor(status: string) {
   }
 }
 
-export default function LiveOrdersPanel() {
+export default function LiveOrdersPanel({ restaurantId }: { restaurantId: string }) {
   const [liveOrders, setLiveOrders] = useState<Order[]>([]);
   const [isPulsing, setIsPulsing] = useState(false);
 
@@ -44,6 +44,7 @@ export default function LiveOrdersPanel() {
       const { data, error } = await supabase
         .from("orders")
         .select("id, table_id, status, total_amount, created_at, estimated_time")
+        .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false })
         .limit(12);
 
@@ -53,10 +54,10 @@ export default function LiveOrdersPanel() {
     fetchOrders();
 
     const channel = supabase
-      .channel("orders-insert")
+      .channel(`orders-insert-${restaurantId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "orders" },
+        { event: "INSERT", schema: "public", table: "orders", filter: `restaurant_id=eq.${restaurantId}` },
         (payload) => {
           setLiveOrders((prev) => [payload.new as Order, ...prev].slice(0, 12));
           setIsPulsing(true);
@@ -68,7 +69,7 @@ export default function LiveOrdersPanel() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [restaurantId]);
 
   const totals = useMemo(() => {
     const totalValue = liveOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
