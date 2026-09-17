@@ -4,13 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMenuItems } from '@/lib/hooks/useMenuItems';
 import MenuItemForm from '@/components/menu/MenuItemForm';
+import GlobalTemplateBrowser from '@/components/menu/GlobalTemplateBrowser';
+import type { GlobalMenuItem } from '@/components/admin/types';
 import { getMyRestaurant } from '@/lib/api/restaurants';
-import { Loader2 } from 'lucide-react';
+import { Loader2, BookOpen } from 'lucide-react';
 
 export default function AddMenuItemPage() {
   const router = useRouter();
   const { addMenuItem } = useMenuItems();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTemplateBrowser, setShowTemplateBrowser] = useState(false);
+  const [templateData, setTemplateData] = useState<Partial<any>>();
 
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,6 +63,17 @@ export default function AddMenuItemPage() {
     }
   };
 
+  const handleTemplateSelect = (item: GlobalMenuItem) => {
+    setTemplateData({
+      name: item.name,
+      description: item.description || '',
+      price: item.price || 0,
+      category: item.category || 'mains',
+      photo_url: item.image_url || '',
+    });
+    setShowTemplateBrowser(false);
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -90,14 +105,33 @@ export default function AddMenuItemPage() {
             <h1 className="font-serif text-2xl font-bold tracking-tight text-slate-900">Add menu item</h1>
             <p className="mt-1 text-sm text-slate-500">Details show on your customer-facing menu.</p>
           </div>
+          <div className="ml-auto flex shrink-0 mt-4 sm:mt-0">
+            <button
+              type="button"
+              onClick={() => setShowTemplateBrowser(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200 transition-all hover:bg-slate-50 hover:text-[#6DBE45]"
+            >
+              <BookOpen className="h-4 w-4" />
+              Browse Templates
+            </button>
+          </div>
         </div>
       </div>
 
       <MenuItemForm
+        initialData={templateData}
+        storageKey="add_menu_draft"
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
         onCancel={() => router.push('/dashboard/menu')}
       />
+
+      {showTemplateBrowser && (
+        <GlobalTemplateBrowser
+          onSelect={handleTemplateSelect}
+          onClose={() => setShowTemplateBrowser(false)}
+        />
+      )}
     </div>
   );
 }

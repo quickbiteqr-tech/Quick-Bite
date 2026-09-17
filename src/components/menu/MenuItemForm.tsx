@@ -6,7 +6,8 @@ import ImageUpload from './ImageUpload';
 import { createMenuCategory, getMenuCategories } from '@/lib/api/menuCategories';
 
 interface MenuItemFormProps {
-  initialData?: MenuItem;
+  initialData?: MenuItem | Partial<MenuItem>;
+  storageKey?: string;
   onSubmit: (data: Omit<MenuItem, 'id' | 'restaurant_id' | 'created_at'>) => void;
   isSubmitting: boolean;
   onCancel: () => void;
@@ -17,6 +18,7 @@ const inputClass =
 
 export default function MenuItemForm({
   initialData,
+  storageKey,
   onSubmit,
   isSubmitting,
   onCancel,
@@ -50,18 +52,35 @@ export default function MenuItemForm({
   }, []);
 
   useEffect(() => {
+    if (storageKey && !initialData) {
+      try {
+        const stored = sessionStorage.getItem(storageKey);
+        if (stored) {
+          setFormData(JSON.parse(stored));
+        }
+      } catch (err) {
+        console.error('Failed to restore form state:', err);
+      }
+    }
+  }, [storageKey, initialData]);
+
+  useEffect(() => {
     if (initialData) {
-      setFormData({
-        name: initialData.name,
-        description: initialData.description,
-        price: String(initialData.price),
+      const updated = {
+        name: initialData.name || '',
+        description: initialData.description || '',
+        price: initialData.price ? String(initialData.price) : '',
         category: initialData.category || 'mains',
         is_veg: initialData.is_veg ?? true,
         photo_url: initialData.photo_url || '',
         available: initialData.available ?? true,
-      });
+      };
+      setFormData(updated);
+      if (storageKey) {
+        sessionStorage.setItem(storageKey, JSON.stringify(updated));
+      }
     }
-  }, [initialData]);
+  }, [initialData, storageKey]);
 
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
@@ -79,23 +98,23 @@ export default function MenuItemForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    let newValue: any = value;
 
     if (type === 'checkbox') {
-      const { checked } = e.target as HTMLInputElement;
-      setFormData((prev) => ({ ...prev, [name]: checked }));
-      return;
-    }
-
-    if (name === 'price') {
+      newValue = (e.target as HTMLInputElement).checked;
+    } else if (name === 'price') {
       const numericValue = value.replace(/[^0-9.]/g, '');
       const decimalCount = (numericValue.match(/\./g) || []).length;
-      const sanitizedValue =
-        decimalCount > 1 ? numericValue.substring(0, numericValue.lastIndexOf('.')) : numericValue;
-      setFormData((prev) => ({ ...prev, [name]: sanitizedValue }));
-      return;
+      newValue = decimalCount > 1 ? numericValue.substring(0, numericValue.lastIndexOf('.')) : numericValue;
     }
 
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [name]: newValue };
+      if (storageKey) {
+        sessionStorage.setItem(storageKey, JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -106,6 +125,9 @@ export default function MenuItemForm({
         category: formData.category,
         price: parseFloat(formData.price),
       });
+      if (storageKey) {
+        sessionStorage.removeItem(storageKey);
+      }
     }
   };
 
@@ -138,7 +160,11 @@ export default function MenuItemForm({
           <label className="mb-3 w-full text-sm font-semibold text-slate-800 sm:text-base">Photo</label>
           <ImageUpload
             value={formData.photo_url}
-            onChange={(url) => setFormData((prev) => ({ ...prev, photo_url: url || '' }))}
+            onChange={(url) => setFormData((prev) => {
+              const updated = { ...prev, photo_url: url || '' };
+              if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(updated));
+              return updated;
+            })}
           />
         </div>
 
@@ -199,7 +225,11 @@ export default function MenuItemForm({
               id="category"
               name="category"
               value={formData.category}
-              onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
+              onChange={(e) => setFormData((prev) => {
+                const updated = { ...prev, category: e.target.value };
+                if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(updated));
+                return updated;
+              })}
               className={inputClass}
             >
               {categories.map((category) => (
@@ -235,7 +265,11 @@ export default function MenuItemForm({
               id="is_veg"
               name="is_veg"
               value={formData.is_veg ? 'veg' : 'non-veg'}
-              onChange={(e) => setFormData((prev) => ({ ...prev, is_veg: e.target.value === 'veg' }))}
+              onChange={(e) => setFormData((prev) => {
+                const updated = { ...prev, is_veg: e.target.value === 'veg' };
+                if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(updated));
+                return updated;
+              })}
               className={inputClass}
             >
               <option value="veg">Veg</option>
