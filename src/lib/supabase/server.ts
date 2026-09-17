@@ -28,6 +28,13 @@ export async function  createServerClient() {
           }
         },
       },
+      // OPTIMIZATION (H-03): Enable keepalive to prevent TCP connection exhaustion 
+      // when connecting to PostgREST in a high-concurrency serverless environment.
+      // Note: If you eventually migrate to direct PostgreSQL queries (e.g. Prisma/pg), 
+      // use process.env.SUPABASE_POOLER_URL instead of the REST API.
+      global: {
+        fetch: (url, init) => fetch(url, { ...init, keepalive: true }),
+      }
     }
   )
 }

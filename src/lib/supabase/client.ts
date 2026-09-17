@@ -27,5 +27,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Note: This won't work for actual Supabase operations, but allows the app to load
 export const supabase = createBrowserClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  {
+    global: {
+      fetch: (url, init) => fetch(url, { ...init, keepalive: true }),
+    }
+  }
 );
