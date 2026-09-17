@@ -6,7 +6,7 @@ import { orderRateLimit } from "@/lib/rate-limit";
 const cartItemSchema = z.object({
   id: z.string().uuid("Invalid menu item ID"),
   quantity: z.number().int().positive("Quantity must be greater than 0"),
-  price: z.number().optional(), // Ignored by the server
+  price: z.number().nonnegative("Price cannot be negative").optional(), // Ignored by the server
 });
 
 const postpaidOrderSchema = z.object({
@@ -90,62 +90,29 @@ export async function POST(req: Request) {
       };
     });
 
-    // 5. Look up the table's internal ID
-    const { data: table, error: tableError } = await supabase
-      .from('tables')
-      .select('id')
-      .eq('restaurant_id', restaurantId)
-      .eq('table_number', tableNumber)
-      .single();
-
-    if (tableError || !table) {
-      return NextResponse.json({ error: `Table "${tableNumber}" does not exist for this restaurant.` }, { status: 404 });
-    }
-
-    // 6. Generate the readable track code
+    // 5. Generate the readable track code
     const generatedTrackCode = 'ORD-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    // 7. Insert ONE order into the 'orders' table with secure total
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert({
-        restaurant_id: restaurantId,
-        table_id: table.id, 
-        total_amount: serverCalculatedTotal,
-        status: "pending",
-        is_prepaid: false,
-        track_code: generatedTrackCode,
-        idempotency_key: idempotencyKey,
-      })
-      .select('id, track_code')
-      .single();
+    // 6. Atomic Insert via RPC
+    const { data: newOrderId, error: rpcError } = await supabase.rpc('place_order_atomic', {
+      p_restaurant_id: restaurantId,
+      p_table_number: tableNumber,
+      p_total_amount: serverCalculatedTotal,
+      p_idempotency_key: idempotencyKey,
+      p_track_code: generatedTrackCode,
+      p_cart_items: secureOrderItems
+    });
 
-    if (orderError || !order) {
-      console.error("Postpaid Order Insert Error:", orderError);
-      return NextResponse.json({ error: "Failed to create order in database." }, { status: 500 });
+    if (rpcError) {
+      console.error("Atomic Order Insert Error:", rpcError);
+      if (rpcError.message.includes('does not exist')) {
+        return NextResponse.json({ error: `Table "${tableNumber}" does not exist for this restaurant.` }, { status: 404 });
+      }
+      return NextResponse.json({ error: "Failed to create order securely." }, { status: 500 });
     }
 
-    // 8. Map the secure items to the order we just created
-    const itemsPayload = secureOrderItems.map((item) => ({
-      order_id: order.id,
-      menu_item_id: item.menu_item_id,
-      quantity: item.quantity,
-      price: item.price,
-    }));
-
-    // 9. Insert the food items into the 'order_items' table
-    const { error: itemsError } = await supabase
-      .from("order_items")
-      .insert(itemsPayload);
-
-    if (itemsError) {
-      // Rollback
-      await supabase.from('orders').delete().eq('id', order.id); 
-      return NextResponse.json({ error: `Could not save order items: ${itemsError.message}` }, { status: 500 });
-    }
-
-    // 10. Success
-    return NextResponse.json({ success: true, trackCode: order.track_code }, { status: 201 });
+    // 7. Success
+    return NextResponse.json({ success: true, trackCode: generatedTrackCode }, { status: 201 });
 
   } catch (err: unknown) {
     console.error("Postpaid API Error:", err);
