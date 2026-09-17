@@ -24,6 +24,10 @@ export default function ImageDropzone({
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentPreview);
   const [error, setError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    setPreviewUrl(currentPreview);
+  }, [currentPreview]);
+
   const onDrop = useCallback(
     (acceptedFiles: File[], rejections: FileRejection[]) => {
       setError(null);

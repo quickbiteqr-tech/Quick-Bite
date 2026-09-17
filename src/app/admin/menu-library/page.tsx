@@ -14,6 +14,8 @@ import {
   X,
   Search,
   ImageIcon,
+  Eye,
+  Pencil,
 } from 'lucide-react';
 
 export default function MenuLibraryPage() {
@@ -21,12 +23,15 @@ export default function MenuLibraryPage() {
   const [items, setItems] = useState<GlobalMenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<GlobalMenuItem | null>(null);
+  const [viewingItem, setViewingItem] = useState<GlobalMenuItem | null>(null);
 
   // Form state
   const [name, setName] = useState('');
   const [category, setCategory] = useState<string>(MENU_CATEGORIES[0]);
   const [description, setDescription] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageDeleted, setImageDeleted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Search / filter
@@ -76,10 +81,16 @@ export default function MenuLibraryPage() {
     }
 
     setSubmitting(true);
-    let imageUrl: string | null = null;
+    let imageUrl: string | null = editingItem ? editingItem.image_url : null;
+    const oldImageUrl = editingItem?.image_url;
 
     try {
-      // 1. Upload image if provided
+      // If user cleared the existing image and didn't upload a new one
+      if (imageDeleted && !imageFile) {
+        imageUrl = null;
+      }
+
+      // 1. Upload new image if provided
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop()?.toLowerCase() || 'png';
         const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${fileExt}`;
@@ -103,26 +114,49 @@ export default function MenuLibraryPage() {
         imageUrl = publicUrlData.publicUrl;
       }
 
-      // 2. Insert into database
-      const { error: insertError } = await supabase
-        .from('global_menu_library')
-        .insert({
-          name: name.trim(),
-          category,
-          description: description.trim() || null,
-          image_url: imageUrl,
-        });
+      // If we uploaded a new image OR explicitly deleted the image without replacement,
+      // delete the old one from bucket to avoid orphans.
+      if (editingItem && oldImageUrl && (imageFile || imageDeleted)) {
+        try {
+          const url = new URL(oldImageUrl);
+          const pathSegments = url.pathname.split('/global-menu/');
+          if (pathSegments[1]) {
+            await supabase.storage.from('global-menu').remove([pathSegments[1]]);
+          }
+        } catch {
+          // Ignore error if old image delete fails
+        }
+      }
 
-      if (insertError) throw insertError;
+      // 2. Insert or Update database
+      if (editingItem) {
+        const { error: updateError } = await supabase
+          .from('global_menu_library')
+          .update({
+            name: name.trim(),
+            category,
+            description: description.trim() || null,
+            image_url: imageUrl,
+          })
+          .eq('id', editingItem.id);
 
-      toast.success(`"${name.trim()}" added to the library!`);
+        if (updateError) throw updateError;
+        toast.success(`"${name.trim()}" updated successfully!`);
+      } else {
+        const { error: insertError } = await supabase
+          .from('global_menu_library')
+          .insert({
+            name: name.trim(),
+            category,
+            description: description.trim() || null,
+            image_url: imageUrl,
+          });
 
-      // Reset form
-      setName('');
-      setCategory(MENU_CATEGORIES[0]);
-      setDescription('');
-      setImageFile(null);
-      setShowForm(false);
+        if (insertError) throw insertError;
+        toast.success(`"${name.trim()}" added to the library!`);
+      }
+
+      closeForm();
 
       // Refresh list
       await fetchItems();
@@ -133,6 +167,26 @@ export default function MenuLibraryPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEdit = (item: GlobalMenuItem) => {
+    setEditingItem(item);
+    setName(item.name);
+    setCategory(item.category);
+    setDescription(item.description || '');
+    setImageFile(null);
+    setImageDeleted(false);
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingItem(null);
+    setName('');
+    setCategory(MENU_CATEGORIES[0]);
+    setDescription('');
+    setImageFile(null);
+    setImageDeleted(false);
   };
 
   // ─── Delete Handler ───
@@ -192,7 +246,10 @@ export default function MenuLibraryPage() {
         </div>
         <button
           type="button"
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => {
+            if (showForm) closeForm();
+            else setShowForm(true);
+          }}
           className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition-all hover:bg-emerald-400"
         >
           {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -200,10 +257,12 @@ export default function MenuLibraryPage() {
         </button>
       </div>
 
-      {/* ── Add Item Form ── */}
+      {/* ── Add/Edit Item Form ── */}
       {showForm && (
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-sm font-bold text-slate-800">New menu item</h2>
+          <h2 className="mb-4 text-sm font-bold text-slate-800">
+            {editingItem ? 'Edit menu item' : 'New menu item'}
+          </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Left: fields */}
@@ -263,8 +322,15 @@ export default function MenuLibraryPage() {
               <div>
                 <p className="mb-1 text-xs font-semibold text-slate-600">Dish Image</p>
                 <ImageDropzone
-                  onFileSelect={(file) => setImageFile(file)}
-                  onClear={() => setImageFile(null)}
+                  currentPreview={!imageDeleted && editingItem?.image_url ? editingItem.image_url : undefined}
+                  onFileSelect={(file) => {
+                    setImageFile(file);
+                    setImageDeleted(false);
+                  }}
+                  onClear={() => {
+                    setImageFile(null);
+                    if (editingItem?.image_url) setImageDeleted(true);
+                  }}
                   isUploading={submitting}
                 />
               </div>
@@ -284,8 +350,8 @@ export default function MenuLibraryPage() {
                   </>
                 ) : (
                   <>
-                    <Plus className="h-4 w-4" />
-                    Add to Library
+                    {editingItem ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {editingItem ? 'Save Changes' : 'Add to Library'}
                   </>
                 )}
               </button>
@@ -382,19 +448,37 @@ export default function MenuLibraryPage() {
                       {new Date(item.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(item)}
-                        disabled={deletingId === item.id}
-                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
-                      >
-                        {deletingId === item.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
-                        )}
-                        Delete
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setViewingItem(item)}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(item)}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-blue-500 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item)}
+                          disabled={deletingId === item.id}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+                        >
+                          {deletingId === item.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -417,20 +501,97 @@ export default function MenuLibraryPage() {
                   <p className="text-sm font-semibold text-slate-900 truncate">{item.name}</p>
                   <p className="text-xs text-slate-500">{item.category}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(item)}
-                  disabled={deletingId === item.id}
-                  className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                >
-                  {deletingId === item.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewingItem(item)}
+                    className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(item)}
+                    className="shrink-0 rounded-lg p-2 text-blue-400 hover:bg-blue-50 hover:text-blue-600"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item)}
+                    disabled={deletingId === item.id}
+                    className="shrink-0 rounded-lg p-2 text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {deletingId === item.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── View Modal ── */}
+      {viewingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <h3 className="font-bold text-slate-800">Dish Details</h3>
+              <button
+                type="button"
+                onClick={() => setViewingItem(null)}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="p-6">
+              {viewingItem.image_url ? (
+                <div className="mb-6 flex justify-center bg-slate-50 rounded-xl overflow-hidden">
+                  <img
+                    src={viewingItem.image_url}
+                    alt={viewingItem.name}
+                    className="max-h-[60vh] max-w-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="mb-6 flex h-48 w-full items-center justify-center rounded-xl bg-slate-100">
+                  <ImageIcon className="h-10 w-10 text-slate-300" />
+                </div>
+              )}
+              
+              <div className="mb-2 flex items-center gap-2">
+                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                  {viewingItem.category}
+                </span>
+                <span className="text-xs text-slate-400">
+                  Added {new Date(viewingItem.created_at).toLocaleDateString()}
+                </span>
+              </div>
+              
+              <h2 className="mb-3 text-xl font-bold text-slate-900">{viewingItem.name}</h2>
+              <p className="text-sm leading-relaxed text-slate-600">
+                {viewingItem.description || 'No description provided for this dish.'}
+              </p>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-right">
+              <button
+                type="button"
+                onClick={() => setViewingItem(null)}
+                className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 transition-all hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
