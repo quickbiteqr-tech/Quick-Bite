@@ -1,6 +1,7 @@
 // File: app/api/create-table/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@/lib/supabase/server";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -13,6 +14,25 @@ export async function POST(req: Request) {
 
     if (!restaurantSlug || !restaurantId || !tableNumber) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // AUTH GUARD: Verify the requester is logged in
+    const supabaseAuth = await createServerClient();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // OWNERSHIP GUARD: Ensure the user actually owns the restaurant
+    const { data: restaurant, error: ownerError } = await supabaseAdmin
+      .from('restaurants')
+      .select('user_id')
+      .eq('id', restaurantId)
+      .single();
+
+    if (ownerError || !restaurant || restaurant.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden: You do not own this restaurant." }, { status: 403 });
     }
 
     const { error: dbError } = await supabaseAdmin.rpc('create_table_with_qr', {

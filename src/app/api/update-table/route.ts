@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@/lib/supabase/server";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,20 +12,30 @@ export async function POST(req: Request) {
     const { tableId, newTableNumber, restaurantId } = await req.json();
 
     if (!tableId || !newTableNumber || !restaurantId ) {
-      console.log("tableId: ", tableId);
-      console.log("newTableNumber: ", newTableNumber);
-      console.log("restaurantId: ", restaurantId);
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // AUTH GUARD: Verify the requester is logged in
+    const supabaseAuth = await createServerClient();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { data: restaurantData, error: restaurantError } = await supabaseAdmin
       .from('restaurants') // Make sure this matches your actual table name
-      .select('slug')
+      .select('slug, user_id')
       .eq('id', restaurantId)
       .single();
 
+    // OWNERSHIP GUARD: Ensure the user actually owns the restaurant
     if (restaurantError || !restaurantData?.slug) {
       return NextResponse.json({ error: "Restaurant not found or missing slug." }, { status: 404 });
+    }
+
+    if (restaurantData.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden: You do not own this restaurant." }, { status: 403 });
     }
     
     const restaurantSlug = restaurantData.slug;
