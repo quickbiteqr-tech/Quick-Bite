@@ -13,6 +13,7 @@ vi.mock('next/server', () => ({
 // Mock Supabase Server Client
 const mockSupabase = {
   from: vi.fn(),
+  rpc: vi.fn(),
 };
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -97,44 +98,28 @@ describe('POST /api/orders/postpaid', () => {
     const mockIn = vi.fn().mockReturnValue({ eq: mockEq });
     const mockSelectMenu = vi.fn().mockReturnValue({ in: mockIn });
 
-    // Mock table lookup
-    const mockSingleTable = vi.fn().mockResolvedValue({ data: { id: fakeTableId }, error: null });
-    const mockEqTable2 = vi.fn().mockReturnValue({ single: mockSingleTable });
-    const mockEqTable1 = vi.fn().mockReturnValue({ eq: mockEqTable2 });
-    const mockSelectTable = vi.fn().mockReturnValue({ eq: mockEqTable1 });
-
     // Mock idempotency check (empty)
     const mockMaybeSingleEmpty = vi.fn().mockResolvedValue({ data: null, error: null });
     const mockGteEmpty = vi.fn().mockReturnValue({ maybeSingle: mockMaybeSingleEmpty });
     const mockEqIdempotencyEmpty = vi.fn().mockReturnValue({ gte: mockGteEmpty });
     const mockSelectOrdersEmpty = vi.fn().mockReturnValue({ eq: mockEqIdempotencyEmpty });
 
-    // Mock order insert
-    let insertedOrderAmount = 0;
-    const mockSingleOrder = vi.fn().mockImplementation(() => ({
-      data: { id: fakeOrderId, track_code: 'ORD-TEST12' },
-      error: null,
-    }));
-    const mockSelectOrder = vi.fn().mockReturnValue({ single: mockSingleOrder });
-    const mockInsertOrder = vi.fn().mockImplementation((payload) => {
-      insertedOrderAmount = payload.total_amount;
-      return { select: mockSelectOrder };
-    });
-
-    // Mock order_items insert
-    let insertedItems: any = null;
-    const mockInsertOrderItems = vi.fn().mockImplementation((payload) => {
-      insertedItems = payload;
-      return { error: null };
-    });
-
     // Mock from() to route to the correct chain
     mockSupabase.from.mockImplementation((table) => {
       if (table === 'menu_items') return { select: mockSelectMenu };
-      if (table === 'tables') return { select: mockSelectTable };
-      if (table === 'orders') return { select: mockSelectOrdersEmpty, insert: mockInsertOrder };
-      if (table === 'order_items') return { insert: mockInsertOrderItems };
+      if (table === 'orders') return { select: mockSelectOrdersEmpty };
       return {};
+    });
+
+    let insertedOrderAmount = 0;
+    let insertedItems: any = null;
+    mockSupabase.rpc.mockImplementation((rpcName, payload) => {
+      if (rpcName === 'place_order_atomic') {
+        insertedOrderAmount = payload.p_total_amount;
+        insertedItems = payload.p_cart_items;
+        return Promise.resolve({ data: fakeOrderId, error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
     });
 
     const res = await POST(req) as any;
@@ -188,14 +173,6 @@ describe('POST /api/orders/postpaid', () => {
     const mockEqTable1 = vi.fn().mockReturnValue({ eq: mockEqTable2 });
     const mockSelectTable = vi.fn().mockReturnValue({ eq: mockEqTable1 });
 
-    const mockSingleOrder = vi.fn().mockResolvedValue({
-      data: { id: 'order-uuid', track_code: 'ORD-TEST99' },
-      error: null,
-    });
-    const mockSelectOrder = vi.fn().mockReturnValue({ single: mockSingleOrder });
-    const mockInsertOrder = vi.fn().mockReturnValue({ select: mockSelectOrder });
-    const mockInsertOrderItems = vi.fn().mockReturnValue({ error: null });
-
     const mockMaybeSingleFound = vi.fn().mockResolvedValue({ 
       data: { id: 'existing-uuid', track_code: 'ORD-TEST99' }, 
       error: null 
@@ -214,11 +191,16 @@ describe('POST /api/orders/postpaid', () => {
     });
 
     mockSupabase.from.mockImplementation((table) => {
-      if (table === 'orders') return { select: mockSelectOrders, insert: mockInsertOrder };
+      if (table === 'orders') return { select: mockSelectOrders };
       if (table === 'menu_items') return { select: mockSelectMenu };
-      if (table === 'tables') return { select: mockSelectTable };
-      if (table === 'order_items') return { insert: mockInsertOrderItems };
       return {};
+    });
+
+    mockSupabase.rpc.mockImplementation((rpcName, payload) => {
+      if (rpcName === 'place_order_atomic') {
+        return Promise.resolve({ data: 'order-uuid', error: null });
+      }
+      return Promise.resolve({ data: null, error: null });
     });
 
     const res1 = await POST(req1) as any;

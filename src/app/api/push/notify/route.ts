@@ -45,8 +45,8 @@ export async function POST(req: Request) {
     }
     
     const restaurantOwnerId = Array.isArray(order.restaurants) 
-      ? order.restaurants[0]?.user_id 
-      : order.restaurants?.user_id;
+      ? (order.restaurants[0] as any)?.user_id 
+      : (order.restaurants as any)?.user_id;
 
     if (restaurantOwnerId !== user.id) {
       return NextResponse.json({ error: 'Forbidden. You do not own this order.' }, { status: 403 });
