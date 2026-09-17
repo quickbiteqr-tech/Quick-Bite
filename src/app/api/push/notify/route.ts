@@ -25,7 +25,33 @@ export async function POST(req: Request) {
     const { orderId, title, message, url } = await req.json(); // Changed 'body' to 'message' for clarity
     if (!orderId) return NextResponse.json({ error: 'orderId required' }, { status: 400 });
 
-    const supabase = await createServerClient(); // FIXED: Removed await
+    const supabase = await createServerClient(); // FIXED: Removed await? No, it's awaited in the original code but comment said otherwise. createServerClient is async now.
+    
+    // H-05: Authenticate user
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // H-05: Verify ownership of the order's restaurant
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('restaurant_id, restaurants(user_id)')
+      .eq('id', orderId)
+      .single();
+
+    if (orderErr || !order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+    
+    const restaurantOwnerId = Array.isArray(order.restaurants) 
+      ? order.restaurants[0]?.user_id 
+      : order.restaurants?.user_id;
+
+    if (restaurantOwnerId !== user.id) {
+      return NextResponse.json({ error: 'Forbidden. You do not own this order.' }, { status: 403 });
+    }
+
     const { data: subs, error } = await supabase
       .from('web_push_subscriptions')
       .select('*')

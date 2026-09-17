@@ -8,15 +8,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ orderId
     const { orderId } = await params;
     const supabase = await createServerClient();
 
-    // validate order exists
+    // H-06: Authenticate user
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // validate order exists and check ownership (H-06)
     const { data: order, error: orderErr } = await supabase
       .from("orders")
-      .select("id, track_code, restaurant_id, status, upi_link")
+      .select("id, track_code, restaurant_id, status, upi_link, restaurants(user_id)")
       .eq("id", orderId)
       .single();
 
     if (orderErr || !order) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    const restaurantOwnerId = Array.isArray(order.restaurants) 
+      ? order.restaurants[0]?.user_id 
+      : order.restaurants?.user_id;
+
+    if (restaurantOwnerId !== user.id) {
+      return NextResponse.json({ error: 'Forbidden. You do not own this order.' }, { status: 403 });
     }
 
     // Only allow magic link for payment_pending orders (adjust if needed)
