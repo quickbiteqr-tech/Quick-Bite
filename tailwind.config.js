@@ -64,6 +64,12 @@ module.exports = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      keyframes: {
+        shine: { 
+          '0%': { backgroundPosition: '200% center' }, 
+          '100%': { backgroundPosition: '0% center' } 
+        }
+      }
     },
   },
   plugins: [],
