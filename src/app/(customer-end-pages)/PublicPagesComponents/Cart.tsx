@@ -208,7 +208,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
                 ) : (
                   <div className="divide-y divide-gray-200">
                     {items.map((item) => (
-                      <CartItem key={item.id} item={item} />
+                      <CartItem key={item.cartLineId} item={item} />
                     ))}
                   </div>
                 )}
