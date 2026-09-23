@@ -7,8 +7,10 @@ import RestaurantLogoCircle from '@/app/(customer-end-pages)/PublicPagesComponen
 type OrderItem = {
   quantity: number;
   price: number;
-  menu_item?: string | null;
+  menu_item_id?: string | null;
   menu_items?: { name?: string } | null;
+  variant_label?: string | null;
+  modifiers?: any | null;
 };
 
 type InitialOrder = {
@@ -196,10 +198,11 @@ export default function StatusClient({
               <div className="text-sm text-muted-foreground py-3">No items available.</div>
             ) : (
               (order.items ?? []).map((it: OrderItem, idx: number) => {
-                const name = it.menu_items?.name ?? (typeof it.menu_item === 'string' ? it.menu_item : 'Item');
+                const name = it.menu_items?.name ?? 'Item';
+                const variantText = it.variant_label ? ` (${it.variant_label})` : '';
                 return (
                   <div key={idx} className="flex justify-between items-center py-3">
-                    <div className="text-sm text-gray-700">{name} x {it.quantity}</div>
+                    <div className="text-sm text-gray-700">{name}{variantText} x {it.quantity}</div>
                     <div className="text-sm font-medium">₹{Number(it.price ?? 0).toFixed(2)}</div>
                   </div>
                 );

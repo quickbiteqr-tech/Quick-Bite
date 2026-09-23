@@ -46,7 +46,7 @@ export default async function OrderTrackPage({ params }: PageProps) {
   // Fetch order items (optional display)
   const { data: orderItems, error: itemsError } = await supabase
     .from('order_items')
-    .select('quantity, price, menu_item, menu_items ( name )')
+    .select('quantity, price, menu_item_id, menu_items:menu_item_id ( name ), variant_label, modifiers')
     .eq('order_id', order.id);
 
   if (itemsError) console.error('Error fetching order items:', itemsError);
@@ -70,7 +70,7 @@ export default async function OrderTrackPage({ params }: PageProps) {
                   : (order.tables as { table_number?: string | number } | null)?.table_number
               )
             : null,
-        items: (orderItems ?? []) as unknown as { quantity: number; price: number; menu_item: string; menu_items: { name: string } | null }[],
+        items: (orderItems ?? []) as unknown as { quantity: number; price: number; menu_item_id: string; menu_items: { name: string } | null; variant_label: string | null; modifiers: any | null }[],
       }}
       restaurant={{
         name: restaurant.restaurant_name,
