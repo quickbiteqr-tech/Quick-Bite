@@ -19,7 +19,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ track_co
 
     const { data: items, error: itemsError } = await supabase
       .from('order_items')
-      .select('quantity, price, menu_item, menu_items ( name )')
+      .select('quantity, price, menu_item_id, menu_items:menu_item_id ( name ), variant_label, modifiers')
       .eq('order_id', data.id);
 
     if (itemsError) {

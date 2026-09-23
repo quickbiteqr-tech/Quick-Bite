@@ -90,7 +90,11 @@ export async function getPublicMenuItems(slug: string): Promise<MenuItem[]> {
   try {
     const { data, error } = await supabase
       .from("menu_items")
-      .select("*")
+      .select(`
+        *,
+        variants:menu_item_variants(*),
+        modifier_groups(*, options:modifier_options(*))
+      `)
       .eq("restaurant_id", restaurant.id)
       .eq("available", true);
 
