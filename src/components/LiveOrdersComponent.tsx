@@ -44,6 +44,8 @@ type GroupedLiveOrder = {
     quantity: number;
     price: number;
     lineTotal: number;
+    variantLabel?: string | null;
+    modifiers?: any[] | null;
   }>;
   totalAmount: number;
 };
@@ -88,6 +90,8 @@ const LiveOrdersComponent: React.FC<LiveOrdersComponentProps> = ({
         quantity: Number(entry.quantity ?? 0),
         price: Number(entry.price ?? 0),
         lineTotal,
+        variantLabel: entry.variant_label,
+        modifiers: entry.modifiers,
       });
       current.totalAmount += lineTotal;
     }
@@ -399,27 +403,59 @@ const LiveOrdersComponent: React.FC<LiveOrdersComponentProps> = ({
                     
                     <CardContent className="pt-2 pb-2 p-2">
                       <div className="flex flex-col gap-2">
-                        <div className="space-y-1.5">
-                          {order.items.map((item) => (
-                            <div key={item.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 rounded-lg border border-slate-100 bg-slate-50/70 px-2 py-1.5">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-900">{item.name}</p>
-                                <p className="text-xs text-slate-600">
-                                  Qty: {item.quantity} x ₹{item.price.toFixed(2)}
-                                </p>
+                        {/* Thermal Receipt Style Container */}
+                        <div className="space-y-0 overflow-hidden rounded-xl border border-slate-200 bg-white font-sans shadow-md">
+                          {order.items.map((item, index) => (
+                            <div 
+                              key={item.id} 
+                              className={cn(
+                                "flex flex-col gap-1.5 p-4",
+                                index !== order.items.length - 1 && "border-b border-dashed border-slate-200"
+                              )}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="rounded bg-slate-100 px-2 py-1 text-lg font-black text-slate-800">
+                                  {item.quantity}x
+                                </div>
+                                <div className="flex-1 pt-0.5">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-lg font-bold leading-none text-slate-900">
+                                      {item.name}
+                                    </h4>
+                                    {item.variantLabel && (
+                                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-blue-700">
+                                        {item.variantLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {item.modifiers && item.modifiers.length > 0 && (
+                                    <div className="ml-2 mt-1 flex flex-col border-l-2 border-slate-200 pl-3">
+                                      {item.modifiers.map((mod: any, i: number) => (
+                                        <div key={i} className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                                          <span className="text-[10px] text-slate-400">↳</span>
+                                          {mod.name}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm font-bold text-slate-800">
+                                    ₹{item.lineTotal.toFixed(2)}
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-sm font-semibold text-slate-800">
-                                ₹{item.lineTotal.toFixed(2)}
-                              </p>
                             </div>
                           ))}
-                        </div>
-                        <div className="text-left sm:text-right">
-                          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                            <p className="text-lg font-bold text-slate-900 sm:text-xl">
-                              ₹{order.totalAmount.toFixed(2)}
-                            </p>
-                            <p className="mt-0.5 text-xs font-medium text-slate-500">Order total</p>
+                          
+                          <div className="border-t-[3px] border-double border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-bold uppercase text-slate-500">Total</p>
+                              <p className="text-xl font-black text-slate-900">
+                                ₹{order.totalAmount.toFixed(2)}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>

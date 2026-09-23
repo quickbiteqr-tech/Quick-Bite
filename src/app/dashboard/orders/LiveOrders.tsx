@@ -13,12 +13,14 @@ export interface OrderItem {
   price: number;
   status: OrderItemStatus | null;
   created_at: string;
+  variant_label?: string | null;
+  modifiers?: any[] | null;
   order: {
     id: string;
     track_code: string | null;
     table_id: string | null;
     table_number: string | null;
-    is_prepaid: boolean; // ADDED: To track payment method
+    is_prepaid: boolean;
     restaurant: { id: string; name: string; slug?: string | null; user_id: string };
   };
   menu_item: { id: string; name: string };
@@ -94,7 +96,7 @@ const LiveOrders = ({ embedded = false }: LiveOrdersProps) => {
           table:tables ( id, table_number ),
           restaurant:restaurants ( id, restaurant_name, slug, user_id ),
 order_items (
-  id, quantity, price,
+  id, quantity, price, variant_label, modifiers,
   menu_item:menu_item_id ( id, name )
 )
         `)
@@ -103,8 +105,6 @@ order_items (
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-
-      console.log("Order data",data);
 
       // 4) normalize → one card per order item
       const normalized: OrderItem[] = (data || []).flatMap((order: unknown) => {
@@ -117,6 +117,8 @@ order_items (
             id: itemObj.id as string,
             quantity: itemObj.quantity as number,
             price: itemObj.price as number,
+            variant_label: itemObj.variant_label as string | null,
+            modifiers: itemObj.modifiers as any[] | null,
             status: dbToUiStatus(orderObj.status as string),
             created_at: orderObj.created_at as string,
             order: {
