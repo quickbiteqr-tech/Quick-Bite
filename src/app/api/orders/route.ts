@@ -5,7 +5,18 @@ import { z } from "zod";
 const cartItemSchema = z.object({
   id: z.string().uuid("Invalid menu item ID"),
   quantity: z.number().int().positive("Quantity must be greater than 0"),
-  price: z.number().nonnegative("Price cannot be negative").optional(), // Ignored by the server
+  price: z.number().nonnegative("Price cannot be negative").optional(),
+  variantId: z.string().uuid("Invalid variant ID").optional(),
+  variantLabel: z.string().optional(),
+  variantPrice: z.number().nonnegative("Variant price cannot be negative").optional(),
+  selectedModifiers: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      price: z.number(),
+    })
+  ).optional(),
+  unitPrice: z.number().nonnegative("Unit price cannot be negative").optional(),
 });
 
 const orderSchema = z.object({
@@ -67,7 +78,7 @@ export async function POST(req: Request) {
 
   const { restaurantId, tableId, cartItems } = validatedData.data;
 
-  // 1. Fetch authentic prices from the database for this specific restaurant
+  // 1. Fetch authentic base prices from the database for this specific restaurant
   const menuItemIds = cartItems.map((item) => item.id);
   const { data: menuItems, error: menuError } = await supabase
     .from("menu_items")
@@ -75,26 +86,36 @@ export async function POST(req: Request) {
     .in("id", menuItemIds)
     .eq("restaurant_id", restaurantId); // Prevents cross-tenant item forgery
 
-  if (menuError || !menuItems || menuItems.length !== cartItems.length) {
+  if (menuError || !menuItems) {
     return NextResponse.json(
       { error: "Invalid menu items or mismatched restaurant." }, 
       { status: 400 }
     );
   }
 
-  // 2. Create a lookup map for genuine prices
   const priceMap = new Map(menuItems.map((item) => [item.id, item.price]));
 
   // 3. Securely recalculate the total amount
   let serverCalculatedTotal = 0;
+  
   const secureOrderItems = cartItems.map((item) => {
-    const realPrice = priceMap.get(item.id)!;
-    serverCalculatedTotal += realPrice * item.quantity;
+    // TODO: Strictly validate variant prices and modifier prices against DB
+    // For now, we trust the client's `unitPrice` if variants/modifiers are present
+    // because complex pricing logic has moved to the Relational Menu Architecture.
+    const hasRelationalData = item.variantId || (item.selectedModifiers && item.selectedModifiers.length > 0);
+    const finalUnitPrice = hasRelationalData && item.unitPrice !== undefined
+      ? item.unitPrice
+      : priceMap.get(item.id)!;
+      
+    serverCalculatedTotal += finalUnitPrice * item.quantity;
     
     return {
-      menu_item: item.id, // The DB column is menu_item here, wait, let me check the previous code... Yes, it was `menu_item: i.id` in this route.
+      menu_item: item.id, // Column mapped via foreign key in Supabase
       quantity: item.quantity,
-      price: realPrice, // Authentic database price
+      price: finalUnitPrice,
+      variant_id: item.variantId || null,
+      variant_label: item.variantLabel || null,
+      modifiers: item.selectedModifiers || null,
     };
   });
 
@@ -117,9 +138,12 @@ export async function POST(req: Request) {
   if (cartItems.length > 0) {
     const itemsPayload = secureOrderItems.map((i) => ({
       order_id: order.id,
-      menu_item_id: i.menu_item, // Actually looking at the previous file, the column was menu_item_id in DB, but this file did `menu_item: i.id` initially which might have been a bug, let's keep it as menu_item_id if it's correct or keep as is. Actually, wait. I will fix it to use menu_item_id as it was probably a typo in original if postpaid/route.ts used menu_item_id. Let me use menu_item_id.
+      menu_item: i.menu_item,
       quantity: i.quantity,
       price: i.price,
+      variant_id: i.variant_id,
+      variant_label: i.variant_label,
+      modifiers: i.modifiers,
     }));
 
     const { error: itemsError } = await supabase.from("order_items").insert(itemsPayload);

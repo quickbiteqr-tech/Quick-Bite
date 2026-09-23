@@ -99,8 +99,6 @@ export async function PUT(
       return NextResponse.json({ error: "Menu item ID is required" }, { status: 400 });
     }
     const parsedId = parseMenuItemId(id);
-    console.log("Menu Id", id);
-    console.log("Parsed Menu Id", parsedId);
     if (!parsedId) {
       return NextResponse.json({ error: "Invalid menu item ID" }, { status: 400 });
     }
@@ -111,44 +109,14 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // ID is UUID (string), no conversion needed
-    console.log("PUT request received for menu item ID:", id);
     let body;
     try {
       body = await req.json();
-      console.log("PUT request body:", body);
     } catch (parseError) {
-      console.error("PUT request body parse error:", parseError);
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    // Strip immutable/non-existent fields defensively from any stale client payload.
-    if (body && typeof body === "object") {
-      delete body.updated_at;
-      delete body.created_at;
-      delete body.id;
-      delete body.restaurant_id;
-    }
-
-    // Validate required fields only if they're being updated
-    // For partial updates (like setting available: false), we don't need name/price
-    // Only validate if name or price are explicitly provided in the request
-    if (body.name !== undefined && !body.name) {
-      console.log("Validation failed: Name cannot be empty");
-      return NextResponse.json(
-        { error: "Name cannot be empty if provided" },
-        { status: 400 }
-      );
-    }
-    if (body.price !== undefined && (body.price === null || body.price < 0)) {
-      console.log("Validation failed: Price must be valid");
-      return NextResponse.json(
-        { error: "Price must be a valid positive number if provided" },
-        { status: 400 }
-      );
-    }
-
-    // Build update object - only include fields that are provided
+    // Build update object for menu_items
     const updateData: {
       name?: string;
       description?: string | null;
@@ -157,54 +125,107 @@ export async function PUT(
       available?: boolean;
       photo_url?: string | null;
       is_veg?: boolean;
+      dietary_tags?: string[];
     } = {};
     
-    // Only update fields that are explicitly provided
     if (body.name !== undefined) updateData.name = body.name;
     if (body.description !== undefined) updateData.description = body.description || null;
     if (body.price !== undefined) updateData.price = body.price;
-    if (body.category !== undefined) {
-      const normalizedCategory = String(body.category || "").trim().toLowerCase();
-      updateData.category = normalizedCategory;
-    }
+    if (body.category !== undefined) updateData.category = String(body.category || "").trim().toLowerCase();
     if (body.available !== undefined) updateData.available = body.available;
     if (body.photo_url !== undefined) updateData.photo_url = body.photo_url || null;
     if (body.is_veg !== undefined) updateData.is_veg = body.is_veg;
+    if (body.dietary_tags !== undefined) {
+      updateData.dietary_tags = body.dietary_tags;
+      // Keep is_veg in sync for backwards compat
+      if (body.dietary_tags.includes('veg')) updateData.is_veg = true;
+      if (body.dietary_tags.includes('non_veg')) updateData.is_veg = false;
+    }
 
-
-    const { data, error } = await supabase
+    // Update base menu_item
+    const { data: menuItem, error: menuError } = await supabase
       .from("menu_items")
       .update(updateData)
       .eq("id", parsedId)
       .select()
       .single();
 
-    if (error) {
-      console.error("❌ PUT menu item Supabase error:", error);
-      console.error("Error code:", error.code);
-      console.error("Error message:", error.message);
-      console.error("Error details:", JSON.stringify(error, null, 2));
-      console.error("Update query was:", { id: parsedId, updateData });
-      
-      // Return more detailed error message
-      let errorMessage = error.message || "Failed to update menu item";
-      if (error.code) {
-        errorMessage = `${errorMessage} (Code: ${error.code})`;
+    if (menuError) {
+      return NextResponse.json({ error: menuError.message }, { status: 400 });
+    }
+
+    // Transactional-ish replacement of relations (Delete Old -> Insert New)
+    try {
+      if (body.variants !== undefined) {
+        await supabase.from("menu_item_variants").delete().eq("menu_item_id", parsedId);
+        
+        if (body.variants.length > 0) {
+          const variantPayload = body.variants.map((v: any, index: number) => ({
+            menu_item_id: parsedId,
+            label: v.label,
+            price: parseFloat(v.price) || 0,
+            sort_order: index,
+          }));
+          const { error: variantError } = await supabase.from("menu_item_variants").insert(variantPayload);
+          if (variantError) throw new Error("Failed to update variants: " + variantError.message);
+        }
       }
-      
-      return NextResponse.json({ 
-        error: errorMessage,
-        code: error.code,
-        details: error.details || null
-      }, { status: 400 });
+
+      if (body.modifier_groups !== undefined) {
+        // Since ON DELETE CASCADE is set for modifier_options, deleting groups deletes their options
+        await supabase.from("modifier_groups").delete().eq("menu_item_id", parsedId);
+
+        if (body.modifier_groups.length > 0) {
+          for (let i = 0; i < body.modifier_groups.length; i++) {
+            const group = body.modifier_groups[i];
+            const { data: groupData, error: groupError } = await supabase
+              .from("modifier_groups")
+              .insert({
+                menu_item_id: parsedId,
+                name: group.name,
+                min_selection: group.min_selection || 0,
+                max_selection: group.max_selection || 1,
+                is_required: group.is_required || false,
+                sort_order: i,
+              })
+              .select()
+              .single();
+
+            if (groupError) throw new Error("Failed to insert modifier group: " + groupError.message);
+
+            if (group.options && group.options.length > 0) {
+              const optionsPayload = group.options.map((opt: any, optIndex: number) => ({
+                modifier_group_id: groupData.id,
+                name: opt.name,
+                price: parseFloat(opt.price) || 0,
+                sort_order: optIndex,
+              }));
+              const { error: optionsError } = await supabase.from("modifier_options").insert(optionsPayload);
+              if (optionsError) throw new Error("Failed to insert modifier options: " + optionsError.message);
+            }
+          }
+        }
+      }
+    } catch (relationError: any) {
+      // If relations fail, the base item was still updated, but relations might be incomplete
+      return NextResponse.json({ error: relationError.message }, { status: 400 });
     }
 
+    // Fetch the fully hydrated item
+    const { data: finalItem } = await supabase
+      .from("menu_items")
+      .select(`
+        *,
+        variants:menu_item_variants(*),
+        modifier_groups:modifier_groups(
+          *,
+          options:modifier_options(*)
+        )
+      `)
+      .eq("id", parsedId)
+      .single();
 
-    if (!data) {
-      return NextResponse.json({ error: "Menu item not found or update failed" }, { status: 404 });
-    }
-
-    return NextResponse.json(data);
+    return NextResponse.json(finalItem || menuItem);
   } catch (err) {
     console.error("PUT menu item unexpected error:", err);
     return NextResponse.json(
