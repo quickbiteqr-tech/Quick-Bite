@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { MenuItem } from '@/types/menu';
 import ImageUpload from './ImageUpload';
 import { createMenuCategory, getMenuCategories } from '@/lib/api/menuCategories';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
 
 interface MenuItemFormProps {
   initialData?: MenuItem | Partial<MenuItem>;
@@ -16,6 +18,34 @@ interface MenuItemFormProps {
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-[#6DBE45] focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/20 sm:text-base';
 
+const DIETARY_OPTIONS = [
+  { id: 'veg', label: 'Veg' },
+  { id: 'non_veg', label: 'Non-Veg' },
+  { id: 'egg', label: 'Egg' },
+  { id: 'vegan', label: 'Vegan' },
+  { id: 'jain', label: 'Jain' },
+  { id: 'gluten_free', label: 'Gluten-Free' },
+];
+
+type FormValues = {
+  name: string;
+  description: string;
+  category: string;
+  photo_url: string;
+  available: boolean;
+  dietary_tags: string[];
+  pricingType: 'single' | 'multiple';
+  price: string;
+  variants: { label: string; price: string }[];
+  modifier_groups: {
+    name: string;
+    min_selection: number;
+    max_selection: number;
+    is_required: boolean;
+    options: { name: string; price: string }[];
+  }[];
+};
+
 export default function MenuItemForm({
   initialData,
   storageKey,
@@ -23,20 +53,66 @@ export default function MenuItemForm({
   isSubmitting,
   onCancel,
 }: MenuItemFormProps) {
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    price: '',
-    category: 'mains',
-    is_veg: true,
-    photo_url: '',
-    available: true,
-  });
-
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [categories, setCategories] = useState<string[]>(['starters', 'mains', 'desserts', 'drinks']);
   const [newCategory, setNewCategory] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+
+  const { register, control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
+    defaultValues: {
+      name: initialData?.name || '',
+      description: initialData?.description || '',
+      category: initialData?.category || 'mains',
+      photo_url: initialData?.photo_url || '',
+      available: initialData?.available ?? true,
+      dietary_tags: initialData?.dietary_tags || (initialData?.is_veg ? ['veg'] : ['non_veg']),
+      pricingType: initialData?.variants && initialData.variants.length > 0 ? 'multiple' : 'single',
+      price: initialData?.price ? String(initialData.price) : '',
+      variants: initialData?.variants?.map(v => ({ label: v.label, price: String(v.price) })) || [],
+      modifier_groups: initialData?.modifier_groups?.map(g => ({
+        name: g.name,
+        min_selection: g.min_selection || 0,
+        max_selection: g.max_selection || 1,
+        is_required: g.is_required || false,
+        options: g.options?.map(o => ({ name: o.name, price: String(o.price) })) || []
+      })) || []
+    }
+  });
+
+  useEffect(() => {
+    if (initialData && Object.keys(initialData).length > 0) {
+      reset({
+        name: initialData.name || '',
+        description: initialData.description || '',
+        category: initialData.category || 'mains',
+        photo_url: initialData.photo_url || '',
+        available: initialData.available ?? true,
+        dietary_tags: initialData.dietary_tags || (initialData.is_veg ? ['veg'] : ['non_veg']),
+        pricingType: initialData.variants && initialData.variants.length > 0 ? 'multiple' : 'single',
+        price: initialData.price ? String(initialData.price) : '',
+        variants: initialData.variants?.map((v: any) => ({ label: v.label, price: String(v.price) })) || [],
+        modifier_groups: initialData.modifier_groups?.map((g: any) => ({
+          name: g.name,
+          min_selection: g.min_selection || 0,
+          max_selection: g.max_selection || 1,
+          is_required: g.is_required || false,
+          options: g.options?.map((o: any) => ({ name: o.name, price: String(o.price) })) || []
+        })) || []
+      });
+    }
+  }, [initialData, reset]);
+
+  const { fields: variantFields, append: appendVariant, remove: removeVariant } = useFieldArray({
+    control,
+    name: "variants"
+  });
+
+  const { fields: groupFields, append: appendGroup, remove: removeGroup } = useFieldArray({
+    control,
+    name: "modifier_groups"
+  });
+
+  const pricingType = watch("pricingType");
+  const dietaryTags = watch("dietary_tags") || [];
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -45,97 +121,17 @@ export default function MenuItemForm({
         const names = data.map((c) => c.name?.toLowerCase()).filter(Boolean);
         setCategories((prev) => Array.from(new Set([...prev, ...names])));
       } catch {
-        // keep defaults when category table not yet available
+        // keep defaults
       }
     };
     loadCategories();
   }, []);
 
-  useEffect(() => {
-    if (storageKey && !initialData) {
-      try {
-        const stored = sessionStorage.getItem(storageKey);
-        if (stored) {
-          setFormData(JSON.parse(stored));
-        }
-      } catch (err) {
-        console.error('Failed to restore form state:', err);
-      }
-    }
-  }, [storageKey, initialData]);
-
-  useEffect(() => {
-    if (initialData) {
-      const updated = {
-        name: initialData.name || '',
-        description: initialData.description || '',
-        price: initialData.price ? String(initialData.price) : '',
-        category: initialData.category || 'mains',
-        is_veg: initialData.is_veg ?? true,
-        photo_url: initialData.photo_url || '',
-        available: initialData.available ?? true,
-      };
-      setFormData(updated);
-      if (storageKey) {
-        sessionStorage.setItem(storageKey, JSON.stringify(updated));
-      }
-    }
-  }, [initialData, storageKey]);
-
-  const validate = () => {
-    const newErrors: { [key: string]: string } = {};
-    if (!formData.name.trim()) newErrors.name = 'Name is required.';
-    if (!formData.description.trim()) newErrors.description = 'Description is required.';
-    if (!formData.price) newErrors.price = 'Price is required.';
-    if (!formData.category.trim()) newErrors.category = 'Category is required.';
-    const priceValue = parseFloat(formData.price);
-    if (isNaN(priceValue) || priceValue <= 0) {
-      newErrors.price = 'Please enter a valid, positive price.';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    let newValue: any = value;
-
-    if (type === 'checkbox') {
-      newValue = (e.target as HTMLInputElement).checked;
-    } else if (name === 'price') {
-      const numericValue = value.replace(/[^0-9.]/g, '');
-      const decimalCount = (numericValue.match(/\./g) || []).length;
-      newValue = decimalCount > 1 ? numericValue.substring(0, numericValue.lastIndexOf('.')) : numericValue;
-    }
-
-    setFormData((prev) => {
-      const updated = { ...prev, [name]: newValue };
-      if (storageKey) {
-        sessionStorage.setItem(storageKey, JSON.stringify(updated));
-      }
-      return updated;
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validate()) {
-      onSubmit({
-        ...formData,
-        category: formData.category,
-        price: parseFloat(formData.price),
-      });
-      if (storageKey) {
-        sessionStorage.removeItem(storageKey);
-      }
-    }
-  };
-
   const handleAddCategory = async () => {
     const name = newCategory.trim();
     if (!name) return;
     if (categories.some((c) => c.toLowerCase() === name.toLowerCase())) {
-      setFormData((prev) => ({ ...prev, category: categories.find((c) => c.toLowerCase() === name.toLowerCase()) || name }));
+      setValue('category', categories.find((c) => c.toLowerCase() === name.toLowerCase()) || name);
       setNewCategory('');
       return;
     }
@@ -144,158 +140,336 @@ export default function MenuItemForm({
       const normalized = name.toLowerCase();
       await createMenuCategory(normalized);
       setCategories((prev) => [...prev, normalized]);
-      setFormData((prev) => ({ ...prev, category: normalized }));
+      setValue('category', normalized);
       setNewCategory('');
     } catch {
-      setErrors((prev) => ({ ...prev, category: 'Could not create category. Ensure DB has menu_categories table.' }));
+      // ignore
     } finally {
       setIsAddingCategory(false);
     }
   };
 
+  const toggleDietaryTag = (tagId: string) => {
+    const currentTags = [...dietaryTags];
+    if (currentTags.includes(tagId)) {
+      setValue('dietary_tags', currentTags.filter(t => t !== tagId));
+    } else {
+      setValue('dietary_tags', [...currentTags, tagId]);
+    }
+  };
+
+  const onSubmitForm = (data: FormValues) => {
+    const payload: Omit<MenuItem, 'id' | 'restaurant_id' | 'created_at'> = {
+      name: data.name,
+      description: data.description,
+      category: data.category,
+      photo_url: data.photo_url,
+      available: data.available,
+      dietary_tags: data.dietary_tags,
+      price: data.pricingType === 'single' ? parseFloat(data.price || '0') : 0,
+      variants: data.pricingType === 'multiple' ? data.variants.map((v, i) => ({
+        id: `temp-var-${i}`,
+        menu_item_id: '',
+        label: v.label,
+        price: parseFloat(v.price || '0')
+      })) : [],
+      modifier_groups: data.modifier_groups.map((g, i) => ({
+        id: `temp-grp-${i}`,
+        menu_item_id: '',
+        name: g.name,
+        min_selection: g.min_selection,
+        max_selection: g.max_selection,
+        is_required: g.is_required,
+        options: g.options.map((o, j) => ({
+          id: `temp-opt-${i}-${j}`,
+          modifier_group_id: '',
+          name: o.name,
+          price: parseFloat(o.price || '0')
+        }))
+      }))
+    };
+
+    onSubmit(payload);
+  };
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-      <form onSubmit={handleSubmit} className="space-y-6 p-5 sm:p-8">
-        <div className="flex flex-col items-center">
-          <label className="mb-3 w-full text-sm font-semibold text-slate-800 sm:text-base">Photo</label>
-          <ImageUpload
-            value={formData.photo_url}
-            onChange={(url) => setFormData((prev) => {
-              const updated = { ...prev, photo_url: url || '' };
-              if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(updated));
-              return updated;
-            })}
-          />
+    <div className="font-sans">
+      <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-6">
+        
+        {/* Card 1: Core Details & Dietary Tags */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+          <div className="mb-6 flex flex-col items-center">
+            <label className="mb-3 w-full text-sm font-semibold text-slate-800">Photo</label>
+            <Controller
+              name="photo_url"
+              control={control}
+              render={({ field }) => (
+                <ImageUpload value={field.value} onChange={field.onChange} />
+              )}
+            />
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-800">
+                Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                {...register("name", { required: "Name is required" })}
+                className={inputClass}
+                placeholder="e.g. Truffle Mushroom Burger"
+              />
+              {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-800">
+                Description
+              </label>
+              <textarea
+                {...register("description")}
+                rows={3}
+                className={inputClass}
+                placeholder="Describe the dish..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-800">
+                  Category <span className="text-red-500">*</span>
+                </label>
+                <select {...register("category")} className={inputClass}>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Add new category"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    className={inputClass}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCategory}
+                    disabled={isAddingCategory}
+                    className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-800">
+                  Available to Order
+                </label>
+                <div className="flex items-center mt-3">
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      {...register("available")}
+                      className="peer sr-only"
+                    />
+                    <div className="relative h-7 w-12 shrink-0 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-1 after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-[#6DBE45] peer-checked:after:translate-x-full peer-checked:after:border-white focus:outline-none" />
+                  </label>
+                  <span className="ml-3 text-sm font-medium text-slate-600">Currently in stock</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-3 block text-sm font-semibold text-slate-800">
+                Dietary Tags
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {DIETARY_OPTIONS.map((option) => {
+                  const isActive = dietaryTags.includes(option.id);
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => toggleDietaryTag(option.id)}
+                      className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                        isActive 
+                          ? 'bg-[#6DBE45] text-white' 
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div>
-          <label htmlFor="name" className="mb-2 block text-sm font-semibold text-slate-800 sm:text-base">
-            Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            id="name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            className={inputClass}
-          />
-          {errors.name && <p className="mt-1 text-xs text-red-600 sm:text-sm">{errors.name}</p>}
-        </div>
+        {/* Card 2: The Pricing Engine */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+          <h2 className="mb-5 text-lg font-bold text-slate-900">Pricing Engine</h2>
+          
+          <div className="mb-6 flex gap-4">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input 
+                type="radio" 
+                {...register("pricingType")} 
+                value="single"
+                className="h-4 w-4 text-[#6DBE45] focus:ring-[#6DBE45]"
+              />
+              <span className="text-sm font-semibold text-slate-800">Single Price</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input 
+                type="radio" 
+                {...register("pricingType")} 
+                value="multiple"
+                className="h-4 w-4 text-[#6DBE45] focus:ring-[#6DBE45]"
+              />
+              <span className="text-sm font-semibold text-slate-800">Multiple Sizes (Variants)</span>
+            </label>
+          </div>
 
-        <div>
-          <label htmlFor="description" className="mb-2 block text-sm font-semibold text-slate-800 sm:text-base">
-            Description <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={3}
-            className={inputClass}
-          />
-          {errors.description && (
-            <p className="mt-1 text-xs text-red-600 sm:text-sm">{errors.description}</p>
+          {pricingType === 'single' ? (
+            <div className="max-w-xs">
+              <label className="mb-2 block text-sm font-semibold text-slate-800">
+                Price (₹) <span className="text-red-500">*</span>
+              </label>
+              <input
+                {...register("price", { required: pricingType === 'single' ? "Price is required" : false })}
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                className={inputClass}
+              />
+              {errors.price && <p className="mt-1 text-xs text-red-600">{errors.price.message}</p>}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {variantFields.map((field, index) => (
+                <div key={field.id} className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <input
+                      {...register(`variants.${index}.label` as const, { required: true })}
+                      placeholder="Size Label (e.g., Half, Full)"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="w-32">
+                    <input
+                      {...register(`variants.${index}.price` as const, { required: true })}
+                      type="number"
+                      placeholder="Price"
+                      className={inputClass}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeVariant(index)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-red-500 hover:bg-red-50"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => appendVariant({ label: '', price: '' })}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <Plus size={16} /> Add Size/Variant
+              </button>
+            </div>
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <div>
-            <label htmlFor="price" className="mb-2 block text-sm font-semibold text-slate-800 sm:text-base">
-              Price (₹) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              id="price"
-              name="price"
-              value={formData.price}
-              onChange={handleChange}
-              className={inputClass}
-              placeholder="0.00"
-              inputMode="decimal"
-            />
-            {errors.price && <p className="mt-1 text-xs text-red-600 sm:text-sm">{errors.price}</p>}
-          </div>
-          <div>
-            <label htmlFor="category" className="mb-2 block text-sm font-semibold text-slate-800 sm:text-base">
-              Category <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="category"
-              name="category"
-              value={formData.category}
-              onChange={(e) => setFormData((prev) => {
-                const updated = { ...prev, category: e.target.value };
-                if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(updated));
-                return updated;
-              })}
-              className={inputClass}
+        {/* Card 3: Customizations (Modifier Groups) */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900">Customizations</h2>
+            <button
+              type="button"
+              onClick={() => appendGroup({ name: '', min_selection: 0, max_selection: 1, is_required: false, options: [{ name: '', price: '' }] })}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-700"
             >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-            {errors.category && <p className="mt-1 text-xs text-red-600 sm:text-sm">{errors.category}</p>}
-            <div className="mt-2 flex gap-2">
-              <input
-                type="text"
-                placeholder="Add new category"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                className={inputClass}
-              />
-              <button
-                type="button"
-                onClick={handleAddCategory}
-                disabled={isAddingCategory}
-                className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {isAddingCategory ? 'Adding...' : 'Add'}
-              </button>
-            </div>
+              <Plus size={16} /> Add Group
+            </button>
           </div>
-          <div>
-            <label htmlFor="is_veg" className="mb-2 block text-sm font-semibold text-slate-800 sm:text-base">
-              Food Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="is_veg"
-              name="is_veg"
-              value={formData.is_veg ? 'veg' : 'non-veg'}
-              onChange={(e) => setFormData((prev) => {
-                const updated = { ...prev, is_veg: e.target.value === 'veg' };
-                if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(updated));
-                return updated;
-              })}
-              className={inputClass}
-            >
-              <option value="veg">Veg</option>
-              <option value="non-veg">Non Veg</option>
-            </select>
+
+          <div className="space-y-6">
+            {groupFields.map((group, groupIndex) => (
+              <div key={group.id} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Group Name
+                    </label>
+                    <input
+                      {...register(`modifier_groups.${groupIndex}.name` as const, { required: true })}
+                      placeholder="e.g. Spice Level, Extra Toppings"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="w-24">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Min
+                    </label>
+                    <input
+                      {...register(`modifier_groups.${groupIndex}.min_selection` as const)}
+                      type="number"
+                      min="0"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="w-24">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Max
+                    </label>
+                    <input
+                      {...register(`modifier_groups.${groupIndex}.max_selection` as const)}
+                      type="number"
+                      min="1"
+                      className={inputClass}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeGroup(groupIndex)}
+                    className="mt-7 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-red-500 shadow-sm hover:bg-red-50"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+                
+                <div className="mb-3 flex items-center">
+                  <input 
+                    type="checkbox"
+                    {...register(`modifier_groups.${groupIndex}.is_required` as const)}
+                    className="mr-2 h-4 w-4 rounded border-slate-300 text-[#6DBE45] focus:ring-[#6DBE45]"
+                  />
+                  <span className="text-sm font-medium text-slate-700">Required Selection</span>
+                </div>
+
+                <div className="mt-4 rounded-lg bg-white p-4 shadow-sm border border-slate-100">
+                  <h4 className="mb-3 text-sm font-semibold text-slate-700">Options</h4>
+                  <ModifierOptionsList control={control} register={register} groupIndex={groupIndex} />
+                </div>
+              </div>
+            ))}
+            
+            {groupFields.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center">
+                <p className="text-sm text-slate-500">No customizations added yet.</p>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/80 p-4">
-          <label htmlFor="available" className="text-sm font-semibold text-slate-800 sm:text-base">
-            Available to order
-          </label>
-          <label className="relative inline-flex cursor-pointer items-center">
-            <input
-              type="checkbox"
-              id="available"
-              name="available"
-              checked={formData.available}
-              onChange={handleChange}
-              className="peer sr-only"
-            />
-            <div className="relative h-6 w-11 shrink-0 rounded-full bg-slate-200 transition-colors after:absolute after:left-[2px] after:top-0.5 after:h-5 after:w-5 after:rounded-full after:border after:border-slate-300 after:bg-white after:transition-all peer-checked:bg-[#6DBE45] peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#6DBE45]/30 peer-focus:ring-offset-2" />
-          </label>
-        </div>
-
-        <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:justify-end">
+        {/* Form Actions */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onCancel}
@@ -312,6 +486,52 @@ export default function MenuItemForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ModifierOptionsList({ control, register, groupIndex }: any) {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `modifier_groups.${groupIndex}.options`
+  });
+
+  return (
+    <div className="space-y-3">
+      {fields.map((field, index) => (
+        <div key={field.id} className="flex items-center gap-2">
+          <GripVertical size={16} className="text-slate-400 cursor-move" />
+          <div className="flex-1">
+            <input
+              {...register(`modifier_groups.${groupIndex}.options.${index}.name` as const, { required: true })}
+              placeholder="Option Name"
+              className={inputClass}
+            />
+          </div>
+          <div className="w-32">
+            <input
+              {...register(`modifier_groups.${groupIndex}.options.${index}.price` as const)}
+              type="number"
+              placeholder="+ Price"
+              className={inputClass}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => remove(index)}
+            className="p-2 text-slate-400 hover:text-red-500"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => append({ name: '', price: '' })}
+        className="mt-2 text-sm font-semibold text-[#6DBE45] hover:underline"
+      >
+        + Add Option
+      </button>
     </div>
   );
 }
