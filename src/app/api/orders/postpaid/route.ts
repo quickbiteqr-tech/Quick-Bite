@@ -21,11 +21,12 @@ const cartItemSchema = z.object({
 });
 
 const postpaidOrderSchema = z.object({
-  restaurantId: z.string().uuid("Invalid restaurant ID"),
-  tableNumber: z.string().min(1, "Table number is required"),
+  restaurantId: z.string().uuid("Invalid restaurant ID").optional(),
+  tableNumber: z.string().min(1, "Table number is required").optional(),
   totalAmount: z.number().optional(), // Ignored by the server
   cartItems: z.array(cartItemSchema).min(1, "Cart cannot be empty"),
   idempotencyKey: z.string().uuid("Invalid idempotency key"),
+  deviceId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -51,7 +52,87 @@ export async function POST(req: Request) {
       );
     }
 
-    const { restaurantId, tableNumber, cartItems, idempotencyKey } = validatedData.data;
+    const { cartItems, idempotencyKey, deviceId } = validatedData.data;
+
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    const contextCookie = cookieStore.get('qb_table_context')?.value;
+
+    if (!contextCookie) {
+      return NextResponse.json({ error: 'Missing table context' }, { status: 403 });
+    }
+
+    let restaurantId: string, tableNumber: string;
+    try {
+      const decoded = Buffer.from(contextCookie, 'base64').toString('utf-8');
+      const parsed = JSON.parse(decoded);
+      restaurantId = parsed.restaurantId;
+      tableNumber = parsed.tableNumber;
+    } catch (e) {
+      return NextResponse.json({ error: 'Invalid table context' }, { status: 400 });
+    }
+
+    if (!restaurantId || !tableNumber) {
+      return NextResponse.json({ error: 'Incomplete table context' }, { status: 400 });
+    }
+
+    // 1.2 Device Ban Check (No Phantom 200 OK for food orders)
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    if (deviceId) {
+      const { data: bannedDevice } = await supabaseAdmin
+        .from('banned_devices')
+        .select('device_id')
+        .eq('device_id', deviceId)
+        .eq('restaurant_id', restaurantId)
+        .single();
+        
+      if (bannedDevice) {
+        // Explicitly kick the banned user from the table session
+        await supabaseAdmin
+          .from('tables')
+          .update({ current_session_id: null })
+          .eq('restaurant_id', restaurantId)
+          .eq('table_number', String(tableNumber));
+
+        return NextResponse.json({ error: 'Your device has been restricted by the restaurant. Please speak with a manager to restore your access.' }, { status: 403 });
+      }
+    }
+
+    // 1.3 Strict Context Matching (Anti-Spoofing)
+    if (body.restaurantId && body.restaurantId !== restaurantId) {
+      return NextResponse.json({ error: 'Restaurant context mismatch' }, { status: 403 });
+    }
+    if (body.tableNumber && String(body.tableNumber) !== String(tableNumber)) {
+      return NextResponse.json({ error: 'Table context mismatch' }, { status: 403 });
+    }
+
+    // 1.4 Single DB Query for Table Validation (Lock & Session)
+    const activeSessionId = cookieStore.get('qb_session')?.value;
+    
+    const { data: tableData, error: tableError } = await supabase
+      .from("tables")
+      .select("id, is_locked, current_session_id")
+      .eq("restaurant_id", restaurantId)
+      .eq("table_number", String(tableNumber))
+      .single();
+
+    if (tableError || !tableData) {
+      console.error("Table lookup error:", tableError);
+      return NextResponse.json({ error: `We could not verify your table. Please scan the QR code on your table to restart your session.` }, { status: 404 });
+    }
+
+    if (tableData.is_locked) {
+      return NextResponse.json({ error: 'This table is currently locked by the staff. Ordering is paused.' }, { status: 403 });
+    }
+
+    if (!activeSessionId || tableData.current_session_id !== activeSessionId) {
+      return NextResponse.json({ error: 'Your session has expired or was cleared by staff. Please scan the QR code again.' }, { status: 403 });
+    }
 
     // 1.5. Idempotency Check (Database)
     const { data: existingOrder } = await supabase
@@ -69,18 +150,6 @@ export async function POST(req: Request) {
       }, { status: 200 }); 
     }
 
-    // 1.7 Get actual Table ID
-    const { data: tableData, error: tableError } = await supabase
-      .from("tables")
-      .select("id")
-      .eq("restaurant_id", restaurantId)
-      .eq("table_number", tableNumber)
-      .single();
-
-    if (tableError || !tableData) {
-      return NextResponse.json({ error: `Table "${tableNumber}" does not exist for this restaurant.` }, { status: 404 });
-    }
-
     // 2. Fetch authentic base prices from the database for this specific restaurant
     const menuItemIds = cartItems.map((item) => item.id);
     const { data: menuItems, error: menuError } = await supabase
@@ -91,7 +160,7 @@ export async function POST(req: Request) {
 
     if (menuError || !menuItems) {
       return NextResponse.json(
-        { error: "Invalid menu items or mismatched restaurant." }, 
+        { error: "We couldn't verify the menu items. Please refresh the page and try again." }, 
         { status: 400 }
       );
     }
@@ -137,7 +206,7 @@ export async function POST(req: Request) {
 
     if (orderError) {
       console.error("Order Insert Error:", orderError);
-      return NextResponse.json({ error: "Failed to create order securely." }, { status: 500 });
+      return NextResponse.json({ error: "We could not process your order at this time. Please try again or order at the counter." }, { status: 500 });
     }
 
     if (cartItems.length > 0) {
@@ -158,7 +227,7 @@ export async function POST(req: Request) {
       if(itemsError) {
           await supabase.from('orders').delete().eq('id', order.id);
           console.error("Order Items Insert Error:", itemsError);
-          return NextResponse.json({ error: `Could not save order items: ${itemsError.message}` }, { status: 500 });
+          return NextResponse.json({ error: "There was an issue saving your order details. Please try again." }, { status: 500 });
       }
     }
 
@@ -167,6 +236,6 @@ export async function POST(req: Request) {
 
   } catch (err: unknown) {
     console.error("Postpaid API Error:", err);
-    return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 });
+    return NextResponse.json({ error: "Your order couldn't be processed due to a network issue. Please scan the QR code on your table to refresh and try again." }, { status: 500 });
   }
 }
