@@ -1,11 +1,12 @@
 // src->components->DashboardNavCards.tsx - "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { LogOut, UserCircle2 } from "lucide-react";
+import { LogOut, UserCircle2, Shield } from "lucide-react";
 import { logout } from "@/lib/auth/logout";
+import { supabase } from "@/lib/supabase/client";
 
 interface DashboardNavCardsProps {
   onClose?: () => void;
@@ -14,6 +15,21 @@ interface DashboardNavCardsProps {
 export function DashboardNavCards({ onClose }: DashboardNavCardsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: rest } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      if (rest) setRestaurantId(rest.id);
+    };
+    fetchUser();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -115,7 +131,21 @@ export function DashboardNavCards({ onClose }: DashboardNavCardsProps) {
         </div>
       </Link>
 
-      <div className="mt-auto pt-4">
+      <div className="mt-auto pt-4 space-y-2">
+        <Link
+          href="/dashboard/security"
+          onClick={handleLinkClick}
+          className="flex w-full items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-100"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-600 shadow-sm">
+            <Shield className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-800">Security</div>
+            <div className="text-xs text-slate-500">Access control</div>
+          </div>
+        </Link>
+
         <button
           onClick={handleLogout}
           disabled={loading}

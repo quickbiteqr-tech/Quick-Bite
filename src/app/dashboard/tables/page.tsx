@@ -3,21 +3,23 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useTables } from '@/lib/hooks/useTables';
-import QrCodeDisplay from '@/components/tables/QrCodeDisplay';
-import { Plus, Trash2, Edit, Loader2, Download, Eye } from 'lucide-react';
+import QRCodeGenerator from '@/components/tables/QRCodeGenerator';
+import { Plus, Trash2, Edit, Loader2, Download, Eye, Lock, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 import QRModal from '@/components/QRModal';
 
 type TableItem = {
-  id: string | number;
-  table_number: string | number;
+  id: string;
+  table_number: string;
   qr_code_url?: string | null;
+  is_locked?: boolean;
   [key: string]: any; 
 };
 
 export default function TablesPage() {
-  const { tables, loading, error, deleteTable } = useTables();
+  const { tables, loading, error, deleteTable, refetch } = useTables();
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const [selectedTableForModal, setSelectedTableForModal] = useState<TableItem | null>(null);
 
@@ -27,18 +29,42 @@ export default function TablesPage() {
     return tables.filter((t) => t.table_number.toLowerCase().includes(q));
   }, [tables, searchQuery]);
 
-  const handleDownloadQR = async (downloadUrl: string, tableNumber: string) => {
+  const handleToggleLock = async (tableId: string, currentLockState: boolean) => {
+    setActionLoading(`lock-${tableId}`);
+    const newLockState = !currentLockState;
     try {
-      const response = await fetch(downloadUrl);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `table-${tableNumber}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
+      const res = await fetch(`/api/admin/tables/${tableId}/lock`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_locked: newLockState }),
+      });
+      if (res.ok) {
+        toast.success(`Table ${newLockState ? 'locked' : 'unlocked'}`);
+        refetch(); // from useTables
+      } else {
+        toast.error('Failed to update table status');
+      }
+    } catch (e) {
+      toast.error('An error occurred');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDownloadQR = (tableId: string, tableNumber: string) => {
+    try {
+      const canvas = document.getElementById(`qr-${tableId}`) as HTMLCanvasElement;
+      if (canvas) {
+        const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+        let downloadLink = document.createElement("a");
+        downloadLink.href = pngUrl;
+        downloadLink.download = `table-${tableNumber}-qr.png`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      } else {
+        toast.error("QR Code not found.");
+      }
     } catch (error) {
       console.error("Download failed:", error);
       toast.error("Failed to download the QR code.");
@@ -185,22 +211,22 @@ export default function TablesPage() {
                     {table.table_number}
                   </h3>
                   {/* QR Image Display */}
-                  {table.qr_code_url && table.qr_code_url !== 'generating...' ? (
+                  {table.id ? (
                     <div className="flex flex-col items-center">
-                      <QrCodeDisplay url={table.qr_code_url} tableName={table.table_number} />
+                      <QRCodeGenerator tableId={String(table.id)} tableName={String(table.table_number)} size={128} />
                       
                       {/* View & Download Buttons for QR */}
                       <div className="mt-3 grid w-full grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => setSelectedTableForModal(table)}
+                          onClick={() => setSelectedTableForModal(table as unknown as TableItem)}
                           className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                         >
                           <Eye className="h-3.5 w-3.5" /> View
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDownloadQR(table.qr_code_url as string, table.table_number)}
+                          onClick={() => handleDownloadQR(String(table.id), String(table.table_number))}
                           className="flex items-center justify-center gap-1.5 rounded-lg bg-[#6DBE45]/10 py-2 text-xs font-semibold text-[#6DBE45] transition-colors hover:bg-[#6DBE45] hover:text-white"
                         >
                           <Download className="h-3.5 w-3.5" /> Download
@@ -213,21 +239,37 @@ export default function TablesPage() {
                     </div>
                   )}
                   <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                    <Link
-                      href={`/dashboard/tables/${table.id}/edit`}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#6DBE45] transition-colors hover:text-[#5aa337] sm:text-sm"
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                      Edit
-                    </Link>
                     <button
                       type="button"
-                      onClick={() => deleteTable(table.id)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-red-500 transition-colors hover:text-red-700 sm:text-sm"
+                      onClick={() => handleToggleLock(String(table.id), !!table.is_locked)}
+                      disabled={actionLoading === `lock-${table.id}`}
+                      className={`inline-flex items-center justify-center min-w-[70px] gap-1 text-xs font-semibold sm:text-sm transition-colors disabled:opacity-50 ${table.is_locked ? 'text-amber-500 hover:text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
+                      {actionLoading === `lock-${table.id}` ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        table.is_locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />
+                      )}
+                      {actionLoading === `lock-${table.id}` ? 'Loading' : (table.is_locked ? 'Unlock' : 'Lock')}
                     </button>
+                    
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/dashboard/tables/${table.id}/edit`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#6DBE45] transition-colors hover:text-[#5aa337] sm:text-sm"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => deleteTable(String(table.id))}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-red-500 transition-colors hover:text-red-700 sm:text-sm"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -238,8 +280,8 @@ export default function TablesPage() {
       <QRModal 
         isOpen={!!selectedTableForModal} 
         onClose={() => setSelectedTableForModal(null)} 
-        qrUrl={selectedTableForModal?.qr_code_url || ''} 
-        tableNumber={Number(selectedTableForModal?.table_number)} 
+        tableId={selectedTableForModal?.id} 
+        tableName={selectedTableForModal?.table_number} 
       />
     </div>
   );

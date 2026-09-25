@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import LiveOrders from "./orders/LiveOrders";
+import LiveServiceRequests from "./components/LiveServiceRequests";
 import { supabase } from "@/lib/supabase/client";
 
 export default function DashboardPage() {
@@ -106,6 +107,7 @@ export default function DashboardPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
+            <LiveServiceRequests />
             <LiveOrders />
           </motion.div>
         )}

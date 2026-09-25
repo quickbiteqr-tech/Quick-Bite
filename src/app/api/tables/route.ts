@@ -33,7 +33,7 @@ export async function GET() {
   // 3. Get tables for that restaurant
   const { data, error } = await supabase
     .from("tables")
-    .select("id, table_number, qr_code_url, created_at")
+    .select("id, table_number, qr_code_url, created_at, is_locked")
     .eq("restaurant_id", restaurant.id)
     .order("created_at", { ascending: false });
 

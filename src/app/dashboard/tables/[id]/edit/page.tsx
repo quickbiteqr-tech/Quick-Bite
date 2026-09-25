@@ -109,24 +109,6 @@ export default function EditTablePage() {
     }
   };
 
-  const handleDownloadQR = async (downloadUrl: string) => {
-    try {
-      const response = await fetch(downloadUrl);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `table-${tableNumber}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error("Download failed:", error);
-      toast.error("Failed to download the image.");
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -197,35 +179,25 @@ export default function EditTablePage() {
           </button>
         </div>
       </form>
-    {/* View & Download QR Buttons */}
-      {url && (
-        <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#6DBE45]/30 bg-white py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-slate-50"
-          >
-            <Eye className="h-4 w-4" />
-            View QR
-          </button>
-          
-          <button
-            type="button"
-            onClick={() => handleDownloadQR(url)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#6DBE45]/10 py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-[#6DBE45] hover:text-white"
-          >
-            <Download className="h-4 w-4" />
-            Download
-          </button>
-        </div>
-      )}
+      
+      {/* View & Download QR Buttons */}
+      <div className="mt-6 flex gap-3">
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#6DBE45]/30 bg-white py-3 text-sm font-bold text-[#6DBE45] transition-colors hover:bg-slate-50"
+        >
+          <Eye className="h-4 w-4" />
+          View / Download QR
+        </button>
+      </div>
 
       {/* Reusable Modal Component */}
       <QRModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        qrUrl={url || ''} 
-        tableNumber={Number(tableNumber)} 
+        tableId={table.id} 
+        tableName={tableNumber} 
       />
     </div>
   );

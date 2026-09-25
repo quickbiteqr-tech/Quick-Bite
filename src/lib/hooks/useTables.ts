@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 
 interface Table {
-  id: number;
+  id: string;
   table_number: string;
   qr_code_url?: string | null;
   created_at?: string;
+  is_locked?: boolean;
 }
 
 export function useTables() {
@@ -49,7 +50,7 @@ export function useTables() {
     fetchTables();
   }, [fetchTables]);
 
-  const deleteTable = async (id: number) => {
+  const deleteTable = async (id: string) => {
     const originalTables = [...tables];
     setTables(prevTables => prevTables.filter(table => table.id !== id));
 

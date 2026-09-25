@@ -57,46 +57,7 @@ export async function POST(req: Request) {
       throw new Error(`Database error: ${dbError.message}`);
     }
 
-    // STEP 2: Generate the NEW QR code via your Edge Function
-    const baseUrl = new URL(req.url).origin;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const functionUrl = `${supabaseUrl}/functions/v1/generate-table-qr`;
-
-    const res = await fetch(functionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`, 
-      },
-      body: JSON.stringify({ restaurantSlug, tableNumber: newTableNumber, baseUrl }),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      await supabaseAdmin
-        .from('tables')
-        .delete()
-        .eq('restaurant_id', restaurantId)
-        .eq('table_number', newTableNumber);
-
-      return NextResponse.json(
-        { error: `QR generation failed: ${errorText}` },
-        { status: res.status }
-      );
-    }
-
-    const data = await res.json();
-    const qrUrl = data.qrCodeUrl || data.url; 
-
-    // STEP 3: Update the table with the newly generated QR URL
-    if (qrUrl) {
-       await supabaseAdmin
-        .from('tables') 
-        .update({ qr_url: qrUrl })
-        .eq('id', tableId);
-    }
-
-    return NextResponse.json({ success: true, qrCodeUrl: qrUrl });
+    return NextResponse.json({ success: true });
 
   } catch (err: unknown) {
     console.error("Backend Error in /api/update-table:", err);
