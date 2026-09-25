@@ -16,9 +16,10 @@ const formatPrice = (price: number) => {
 
 interface CustomerMenuItemCardProps {
   item: MenuItem;
+  isReadOnly?: boolean;
 }
 
-export default function CustomerMenuItemCard({ item }: CustomerMenuItemCardProps) {
+export default function CustomerMenuItemCard({ item, isReadOnly = false }: CustomerMenuItemCardProps) {
   const { addItem, removeItem, items } = useCartStore();
   const isVeg = 'dietary_tags' in item 
     ? item.dietary_tags?.includes('veg') 
@@ -80,18 +81,39 @@ export default function CustomerMenuItemCard({ item }: CustomerMenuItemCardProps
   return (
     <>
     <div
-      className="group flex cursor-pointer items-center justify-between gap-3 border-b border-dashed border-slate-200 bg-white py-4"
+      className="group flex items-start justify-between gap-4 border-b border-slate-100 bg-white p-4"
       onClick={() => setIsDetailOpen(true)}
     >
-      <div className="min-w-0 flex flex-1 items-start gap-3">
-        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 shadow-sm">
+      {/* Left Column - 70% */}
+      <div className="flex-1 min-w-0 pr-2">
+        <div className="flex items-center gap-2">
+          {/* FSSAI Standard Dietary Icon */}
+          <span className={`flex h-4 w-4 items-center justify-center rounded-sm border ${isVeg ? 'border-green-600' : 'border-red-600'}`}>
+            <span className={`h-2 w-2 rounded-full ${isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+          </span>
+        </div>
+        
+        <h3 className="mt-1 text-base font-bold text-slate-800 line-clamp-2">{item.name}</h3>
+        <p className="mt-1 text-sm font-semibold text-slate-700">
+          {hasCustomizations && <span className="text-xs text-slate-500 font-normal mr-1">from</span>}
+          {formatPrice(displayPrice)}
+        </p>
+        
+        {item.description && (
+          <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.description}</p>
+        )}
+      </div>
+
+      {/* Right Column - 30% */}
+      <div className="relative shrink-0 flex flex-col items-center pb-4">
+        <div className="relative h-28 w-28 overflow-hidden rounded-xl bg-slate-50 shadow-sm border border-slate-100">
           {item.photo_url ? (
             <Image
               src={item.photo_url}
               alt={item.name}
               fill
-              className="object-cover object-center transition-transform duration-300 group-hover:scale-105"
-              sizes="96px"
+              className="object-cover w-full h-full"
+              sizes="112px"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-[10px] font-medium text-slate-400">
@@ -99,58 +121,49 @@ export default function CustomerMenuItemCard({ item }: CustomerMenuItemCardProps
             </div>
           )}
         </div>
-        <div className="min-w-0 flex-1 py-1">
-          <div className="mb-1 flex items-center gap-2">
-            <span className={isVeg ? 'veg-icon' : 'non-veg-icon'}>
-              <span className={isVeg ? 'veg-dot' : 'non-veg-dot'} />
-            </span>
-          </div>
-          <h3 className="line-clamp-2 text-lg font-bold leading-tight text-slate-900">{item.name}</h3>
-          <p className="mt-1 text-sm font-semibold text-slate-700">
-            {hasCustomizations && <span className="text-xs text-slate-500 font-normal mr-1">from</span>}
-            {formatPrice(displayPrice)}
-          </p>
-          {item.description && (
-            <p className="mt-1.5 line-clamp-1 text-xs text-slate-500">{item.description}</p>
+
+        {/* Overlapping ADD Button */}
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 z-10">
+          {!hasCustomizations && totalQuantity > 0 ? (
+            <div className={`flex items-center h-8 rounded-lg border border-slate-100 bg-white shadow-md w-24 ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}>
+              <button
+                onClick={handleRemoveClick}
+                disabled={isReadOnly}
+                className="flex-1 flex items-center justify-center text-[#6DBE45] transition hover:bg-slate-50 h-full rounded-l-lg"
+              >
+                {totalQuantity === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
+              </button>
+              <span className="w-8 text-center text-sm font-extrabold text-[#6DBE45]">{totalQuantity}</span>
+              <button
+                onClick={handleAddClick}
+                disabled={isReadOnly}
+                className="flex-1 flex items-center justify-center text-[#6DBE45] transition hover:bg-slate-50 h-full rounded-r-lg"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={handleAddClick}
+                disabled={isReadOnly}
+                className={`bg-white text-[#6DBE45] font-extrabold text-sm px-6 py-1.5 rounded-lg shadow-md border border-slate-100 uppercase tracking-wide whitespace-nowrap ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+              >
+                ADD
+              </button>
+              {totalQuantity > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#6DBE45] text-[10px] font-bold text-white shadow-sm border border-white">
+                  {totalQuantity}
+                </span>
+              )}
+            </div>
           )}
         </div>
-      </div>
-      <div className="shrink-0 flex flex-col items-center">
-        {!hasCustomizations && totalQuantity > 0 ? (
-          <div className="inline-flex h-9 items-center rounded-lg border border-[#6DBE45]/30 bg-white p-1 shadow-sm">
-            <button
-              onClick={handleRemoveClick}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#6DBE45] transition hover:bg-[#6DBE45]/10"
-              aria-label="Decrease quantity"
-            >
-              {totalQuantity === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
-            </button>
-            <span className="min-w-7 px-1 text-center text-sm font-bold text-slate-800">{totalQuantity}</span>
-            <button
-              onClick={handleAddClick}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#6DBE45] text-white shadow-sm transition hover:bg-[#5aa337]"
-              aria-label="Increase quantity"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-        ) : (
-          <div className="relative">
-            <button
-              onClick={handleAddClick}
-              className="inline-flex h-9 w-[80px] items-center justify-center rounded-lg border border-[#6DBE45]/30 bg-white text-sm font-bold text-[#6DBE45] shadow-sm transition hover:bg-[#6DBE45]/5"
-            >
-              ADD
-            </button>
-            {totalQuantity > 0 && (
-              <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#6DBE45] text-[10px] font-bold text-white shadow-sm">
-                {totalQuantity}
-              </span>
-            )}
-          </div>
-        )}
+        
         {hasCustomizations && (
-          <span className="mt-1 text-[9px] font-medium uppercase tracking-wider text-slate-400">Customizable</span>
+          <span className="absolute -bottom-5 text-[9px] font-medium text-slate-400 whitespace-nowrap left-1/2 -translate-x-1/2">
+            Customizable
+          </span>
         )}
       </div>
     </div>
@@ -190,9 +203,10 @@ export default function CustomerMenuItemCard({ item }: CustomerMenuItemCardProps
           </div>
           
           {!hasCustomizations && totalQuantity > 0 ? (
-            <div className="inline-flex h-12 items-center rounded-xl border border-[#6DBE45]/30 bg-white p-1.5 shadow-sm">
+            <div className={`inline-flex h-12 items-center rounded-xl border border-[#6DBE45]/30 bg-white p-1.5 shadow-sm ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}>
               <button
                 onClick={handleRemoveClick}
+                disabled={isReadOnly}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#6DBE45] transition hover:bg-[#6DBE45]/10"
               >
                 {totalQuantity === 1 ? <Trash2 size={16} /> : <Minus size={16} />}
@@ -200,6 +214,7 @@ export default function CustomerMenuItemCard({ item }: CustomerMenuItemCardProps
               <span className="min-w-10 px-2 text-center text-lg font-bold text-slate-800">{totalQuantity}</span>
               <button
                 onClick={handleAddClick}
+                disabled={isReadOnly}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#6DBE45] text-white shadow-sm transition hover:bg-[#5aa337]"
               >
                 <Plus size={16} />
@@ -207,11 +222,12 @@ export default function CustomerMenuItemCard({ item }: CustomerMenuItemCardProps
             </div>
           ) : (
             <button
+              disabled={isReadOnly}
               onClick={() => {
                 setIsDetailOpen(false);
                 handleAddClick({ stopPropagation: () => {} } as React.MouseEvent);
               }}
-              className="inline-flex h-12 items-center rounded-xl bg-[#6DBE45] px-8 text-sm font-bold text-white shadow-[0_8px_20px_rgba(109,190,69,0.25)] transition hover:bg-[#5aa337]"
+              className={`inline-flex h-12 items-center rounded-xl px-8 text-sm font-bold text-white shadow-[0_8px_20px_rgba(109,190,69,0.25)] transition ${isReadOnly ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-[#6DBE45] hover:bg-[#5aa337]'}`}
             >
               {totalQuantity > 0 && hasCustomizations ? 'ADD ANOTHER' : 'ADD TO ORDER'}
             </button>
