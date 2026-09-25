@@ -7,6 +7,7 @@ import { getCustomerMenuBundle } from '@/lib/api/public';
 import CustomerMenuItemCard from '@/app/(customer-end-pages)/PublicPagesComponents/CustomerMenuItemCard';
 import RestaurantLogoCircle from '@/app/(customer-end-pages)/PublicPagesComponents/RestaurantLogoCircle';
 import Cart from '@/app/(customer-end-pages)/PublicPagesComponents/Cart';
+import WaiterBell from '@/app/(customer-end-pages)/PublicPagesComponents/WaiterBell';
 import { useCartStore } from '@/app/(customer-end-pages)/store/cartStore';
 import { MenuItem as BaseMenuItem } from '@/types/menu';
 import {
@@ -20,6 +21,7 @@ import {
   MapPin,
   Mail,
   User,
+  UtensilsCrossed,
 } from 'lucide-react';
 
 interface RestaurantDetails {
@@ -51,10 +53,14 @@ export default function CustomerMenuPage() {
   const [error, setError] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isVegOnly, setIsVegOnly] = useState(false);
+  const [activeDietaryTag, setActiveDietaryTag] = useState<string | null>(null);
   const [isProfileSidebarOpen, setIsProfileSidebarOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const { totalItems } = useCartStore();
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const dietaryOptions = ['Veg', 'Non-Veg', 'Egg', 'Vegan', 'Jain', 'Gluten-Free'];
+
+  const { totalItems, items } = useCartStore();
+  const totalPrice = items.reduce((sum, cartItem) => sum + ((cartItem.unitPrice || cartItem.price) * cartItem.quantity), 0);
 
   useEffect(() => {
     if (!restaurantSlug || !tableNumber) {
@@ -72,6 +78,22 @@ export default function CustomerMenuPage() {
         }
         setRestaurantDetails(details);
         setMenuItems(items || []);
+
+        // Verify session for Read-Only mode
+        try {
+          const res = await fetch('/api/sessions/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ restaurantId: details.id, tableNumber })
+          });
+          const sessionData = await res.json();
+          if (!sessionData.valid) {
+            setIsReadOnly(true);
+          }
+        } catch (e) {
+          console.error('Failed to verify session', e);
+        }
+
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : "An error occurred while loading the menu.";
         setError(errorMessage);
@@ -84,7 +106,20 @@ export default function CustomerMenuPage() {
   
   const filteredItems = menuItems.filter((item) => {
     if (!item.name || !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (isVegOnly && item.is_veg !== true) return false;
+    
+    if (activeDietaryTag) {
+      const lowerFilter = activeDietaryTag.toLowerCase();
+      // Safe check for dietary_tags property since it might not be in the strict MenuItem type yet
+      const tags = ('dietary_tags' in item ? (item as any).dietary_tags : []) || [];
+      
+      if (lowerFilter === 'veg') {
+        if (item.is_veg !== true && !tags.includes('veg')) return false;
+      } else if (lowerFilter === 'non-veg') {
+        if (item.is_veg !== false && !tags.includes('non-veg')) return false;
+      } else {
+        if (!tags.includes(lowerFilter)) return false;
+      }
+    }
     return true;
   });
 
@@ -97,11 +132,49 @@ export default function CustomerMenuPage() {
 
   const categoryOrder = Object.keys(groupedMenu);
   const visibleCategories = categoryOrder.length > 0 ? categoryOrder : ['mains'];
+  
   useEffect(() => {
     if (activeCategory === 'all' && visibleCategories.length > 0) setActiveCategory(visibleCategories[0]);
     if (activeCategory !== 'all' && !visibleCategories.includes(activeCategory)) setActiveCategory(visibleCategories[0]);
   }, [activeCategory, visibleCategories]);
+
+  // Scroll Spy Logic
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id.replace('section-', '');
+            setActiveCategory(id);
+          }
+        });
+      },
+      { rootMargin: '-120px 0px -60% 0px' }
+    );
+
+    visibleCategories.forEach((cat) => {
+      const el = document.getElementById(`section-${cat}`);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [visibleCategories]);
+
   const activeCategories = categoryOrder.filter((category) => groupedMenu[category] && groupedMenu[category].length > 0);
+
+  const scrollToCategory = (category: string) => {
+    setActiveCategory(category);
+    const element = document.getElementById(`section-${category}`);
+    if (element) {
+      const headerOffset = 160; // Offset for sticky nav
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth',
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -128,29 +201,37 @@ export default function CustomerMenuPage() {
     `Welcome to ${restaurantDetails?.restaurant_name?.trim() || 'us'}. We're glad you're here—enjoy browsing the menu and let us know if you need anything.`;
 
   return (
-    <div className="min-h-screen bg-[#e2e8df] font-sans pb-28">
-      <div className="mx-auto min-h-screen max-w-5xl bg-white lg:border-x lg:border-gray-100">
-        <header className="sticky top-0 z-50 border-b border-gray-100 bg-[#f4f4f4] px-3 py-3 shadow-sm backdrop-blur-md sm:px-5 sm:py-4">
+    <div className="min-h-screen bg-[#f4f4f5] font-sans pb-28">
+      <div className="mx-auto min-h-screen max-w-2xl bg-white lg:border-x lg:border-gray-100 shadow-sm relative">
+        
+        {isReadOnly && (
+          <div className="bg-slate-900 text-white px-4 py-2.5 text-center text-sm font-bold shadow-sm relative z-50 flex items-center justify-center gap-2">
+            <AlertTriangle size={16} className="text-red-400" />
+            Session Expired. Please scan the QR code on your table again.
+          </div>
+        )}
+
+        <header className="sticky top-0 z-40 bg-white px-3 pt-3 shadow-sm sm:px-5 sm:pt-4">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <RestaurantLogoCircle
                 logoUrl={restaurantDetails?.logo_url}
                 restaurantName={restaurantDetails?.restaurant_name}
               />
-              <h1 className="line-clamp-2 text-lg font-semibold text-[#2D3436] sm:text-xl">
+              <h1 className="line-clamp-2 text-lg font-bold text-[#2D3436] sm:text-xl">
                 {restaurantDetails ? restaurantDetails.restaurant_name : 'Menu'}
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm">
+              <span className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-800">
                 🍽 {tableNumber}
               </span>
               <button
-                className="rounded-full border border-gray-200 bg-white p-2 text-gray-600 shadow-sm transition hover:bg-gray-50 hover:shadow"
+                className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
                 aria-label="Profile"
                 onClick={() => setIsProfileSidebarOpen(true)}
               >
-                <UserCircle2 size={18} />
+                <UserCircle2 size={20} />
               </button>
             </div>
           </div>
@@ -158,68 +239,94 @@ export default function CustomerMenuPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
-              placeholder="Search item"
+              placeholder="Search dishes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-700 outline-none transition focus:ring-4 focus:ring-orange-100 sm:text-base"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-slate-300 focus:bg-white"
             />
           </div>
-          <div className="mb-3 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsVegOnly((prev) => !prev)}
-              className="inline-flex h-10 shrink-0 min-w-fit items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
-            >
-              <span className="whitespace-nowrap">Veg Mode</span>
-              <span className={`relative h-[26px] w-[52px] rounded-[26px] transition ${isVegOnly ? 'bg-[#2ecc71]' : 'bg-[#222]'}`}>
-                <span
-                  className={`absolute top-[3px] h-5 w-5 rounded-full bg-white transition ${
-                    isVegOnly ? 'left-[26px]' : 'left-[3px]'
-                  }`}
-                />
-                <span
-                  className={`absolute top-[9px] h-[8px] w-[8px] bg-green-600 transition ${
-                    isVegOnly ? 'left-[33px]' : 'left-[8px]'
-                  }`}
-                  style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }}
-                />
-              </span>
-            </button>
+          <div className="-mx-3 px-3 sm:-mx-5 sm:px-5 mb-2 overflow-x-auto touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center gap-2 pb-1">
+              {dietaryOptions.map((tag) => {
+                const isActive = activeDietaryTag === tag;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setActiveDietaryTag(isActive ? null : tag)}
+                    className={`inline-flex h-8 shrink-0 items-center rounded-md border px-3 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors ${
+                      isActive 
+                        ? 'border-[#6DBE45] bg-[#6DBE45]/10 text-[#6DBE45]' 
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="mt-1 rounded-2xl border border-gray-200 bg-white p-2">
-          <div className="flex items-center gap-2 pb-1">
-            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-3 overflow-x-auto">
+          
+          {/* Zomato/Swiggy Sticky Category Nav */}
+          <div className="-mx-3 px-3 sm:-mx-5 sm:px-5 border-t border-slate-100">
+            <div className="flex items-center overflow-x-auto touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {activeCategories.map((category) => (
                 <button
                   key={category}
-                  onClick={() => setActiveCategory(category)}
-                  className="group min-w-[78px]"
+                  onClick={() => scrollToCategory(category)}
+                  className={`shrink-0 px-4 py-3 text-sm transition-all whitespace-nowrap capitalize ${
+                    activeCategory === category 
+                      ? 'text-[#6DBE45] font-bold border-b-2 border-[#6DBE45]' 
+                      : 'text-slate-500 font-medium'
+                  }`}
                 >
-                  <div className={`mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-xl border ${activeCategory === category ? 'border-[#FF6B00] bg-orange-50' : 'border-gray-200 bg-gray-50'}`}>
-                    <span className="text-xl">🍽</span>
-                  </div>
-                  <p className={`line-clamp-2 text-center text-xs font-medium capitalize ${activeCategory === category ? 'text-[#FF6B00]' : 'text-gray-700'}`}>{category}</p>
-                  <div className={`mx-auto mt-1 h-0.5 w-12 rounded ${activeCategory === category ? 'bg-[#FF6B00]' : 'bg-transparent'}`} />
+                  {category}
                 </button>
               ))}
             </div>
           </div>
-          </div>
         </header>
-        <main className="p-3 sm:p-5">
+
+        <main className="bg-slate-50 min-h-screen">
           {!restaurantDetails || menuItems.length === 0 ? (
-            <div className="text-center mt-20">
-              <p className="text-xl text-gray-600">This restaurant&apos;s menu is not available right now.</p>
+            <div className="text-center mt-20 p-6">
+              <p className="text-lg text-slate-500 font-medium">This restaurant&apos;s menu is not available right now.</p>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center mt-32 px-6 text-center animate-in fade-in duration-500">
+               <div className="h-24 w-24 mb-6 rounded-full bg-white flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 text-slate-300">
+                 <UtensilsCrossed size={40} strokeWidth={1.5} />
+               </div>
+               <h3 className="text-[22px] font-bold text-slate-800 mb-3 tracking-tight">Not Serving This Currently</h3>
+               <p className="text-[15px] text-slate-500 max-w-sm mb-8 leading-relaxed">
+                 We couldn't find any dishes matching your exact preference. Try clearing your filters to explore our full curated menu.
+               </p>
+               <button
+                 onClick={() => {
+                   setSearchQuery('');
+                   setActiveDietaryTag(null);
+                 }}
+                 className="px-8 py-3.5 bg-slate-900 text-white text-[13px] font-bold uppercase tracking-wider rounded-xl shadow-[0_8px_20px_rgba(15,23,42,0.2)] hover:bg-slate-800 hover:-translate-y-0.5 transition-all active:scale-[0.98]"
+               >
+                 Clear Filters
+               </button>
             </div>
           ) : (
-            <div className="space-y-10 sm:space-y-12">
+            <div className="space-y-4">
               {(activeCategory ? [activeCategory] : categoryOrder).map(
                 (category) =>
                   groupedMenu[category] && groupedMenu[category].length > 0 && (
-                    <section key={category} id={`section-${category}`} className="rounded-2xl bg-white p-1">
-                      <h2 className="mb-4 flex items-center justify-between text-2xl font-semibold capitalize text-[#2D3436]">{category} ({groupedMenu[category].length}) <ChevronDown className="h-5 w-5 text-gray-700" /></h2>
-                      <div className="space-y-1">
-                        {groupedMenu[category].map((item) => <CustomerMenuItemCard key={item.id} item={item} />)}
+                    <section key={category} id={`section-${category}`} className="bg-white scroll-mt-36 pb-2">
+                      <div className="px-4 py-4 border-b border-slate-100">
+                        <h2 className="text-lg font-bold capitalize text-slate-800 flex items-center justify-between">
+                          {category} 
+                          <span className="text-sm font-medium text-slate-400">({groupedMenu[category].length})</span>
+                        </h2>
+                      </div>
+                      <div className="flex flex-col">
+                        {groupedMenu[category].map((item) => (
+                          <CustomerMenuItemCard key={item.id} item={item} isReadOnly={isReadOnly} />
+                        ))}
                       </div>
                     </section>
                   )
@@ -229,24 +336,42 @@ export default function CustomerMenuPage() {
         </main>
       </div>
 
-      <button
-        onClick={() => setIsCartOpen(true)}
-        className="fixed bottom-5 left-1/2 z-[1100] flex w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 items-center justify-between rounded-xl bg-[#2D3436] px-4 py-3 text-white shadow-xl transition hover:bg-[#1f2425]"
-      >
-        <span className="flex items-center gap-2 text-sm font-medium">
-          <ShoppingCart size={16} />
-          {totalItems()} {totalItems() === 1 ? 'item' : 'items'}
-        </span>
-        <span className="text-sm font-semibold">View Cart</span>
-      </button>
+      {/* Floating Zomato/Swiggy Style Cart Bar */}
+      {!isReadOnly && totalItems() > 0 && (
+        <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="flex w-full max-w-2xl items-center justify-between rounded-xl bg-[#6DBE45] px-4 py-3.5 text-white shadow-xl transition active:scale-[0.98] pointer-events-auto"
+          >
+            <div className="flex flex-col items-start leading-tight">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-white/90">
+                {totalItems()} {totalItems() === 1 ? 'Item' : 'Items'} Added
+              </span>
+              <span className="mt-0.5 flex items-center gap-1 text-base font-bold">
+                View Cart <ShoppingCart size={14} className="opacity-80" />
+              </span>
+            </div>
+            <span className="text-lg font-extrabold tracking-tight">
+              ₹{totalPrice.toFixed(2)} &rarr;
+            </span>
+          </button>
+        </div>
+      )}
 
-      {restaurantDetails && restaurantDetails.id && tableNumber && restaurantSlug && (
+      {!isReadOnly && restaurantDetails && restaurantDetails.id && tableNumber && restaurantSlug && (
         <Cart
           isOpen={isCartOpen}
           onClose={() => setIsCartOpen(false)}
           restaurantId={restaurantDetails.id}
           tableNumber={tableNumber}
           restaurantSlug={restaurantSlug}
+        />
+      )}
+
+      {!isReadOnly && restaurantDetails && restaurantDetails.id && tableNumber && (
+        <WaiterBell
+          restaurantId={restaurantDetails.id}
+          tableNumber={tableNumber}
         />
       )}
 

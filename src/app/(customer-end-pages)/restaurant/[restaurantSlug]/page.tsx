@@ -1,40 +1,94 @@
-// src/app/customer-end-pages/[restaurantSlug]/page.tsx
+import { cookies } from 'next/headers';
+import CustomerMenuClient from '@/app/(customer-end-pages)/PublicPagesComponents/CustomerMenuClient';
+import { AlertTriangle, UtensilsCrossed } from 'lucide-react';
+import React from 'react';
+import { createServerClient } from '@/lib/supabase/server';
 
-import { getRestaurantBySlugServer } from "@/lib/api/public-server";
-import { Scan } from 'lucide-react';
-import Link from "next/link";
-
-// This page now serves as a guide for users who land on the restaurant slug URL without a table ID.
-export default async function RestaurantLandingPage({ params }: { params: Promise<{ restaurantSlug: string }> }) {
+export default async function RestaurantMenuPage({
+  params
+}: {
+  params: Promise<{ restaurantSlug: string }>
+}) {
   const { restaurantSlug } = await params;
-  const restaurant = await getRestaurantBySlugServer(restaurantSlug);
+  const cookieStore = await cookies();
+  
+  const sessionCookie = cookieStore.get('qb_session')?.value;
+  const contextCookie = cookieStore.get('qb_table_context')?.value;
+
+  let isSessionValid = false;
+  let tableContext: { restaurantId?: string; tableNumber?: string; tableId?: string } = {};
+
+  if (sessionCookie && contextCookie) {
+    try {
+      const decoded = Buffer.from(contextCookie, 'base64').toString('utf-8');
+      tableContext = JSON.parse(decoded);
+      
+      // Hit the database to strictly verify if session is revoked/expired and check if table is locked
+      if (tableContext.restaurantId && tableContext.tableNumber) {
+        const supabase = await createServerClient();
+        const { data: sessionData } = await supabase
+          .from('diner_sessions')
+          .select('revoked, expires_at')
+          .eq('id', sessionCookie)
+          .single();
+          
+        if (sessionData) {
+          if (!sessionData.revoked && new Date(sessionData.expires_at) > new Date()) {
+            isSessionValid = true;
+          }
+        } else {
+          isSessionValid = true;
+        }
+
+        if (tableContext.tableId) {
+          const { data: tableData } = await supabase
+            .from('tables')
+            .select('is_locked')
+            .eq('id', tableContext.tableId)
+            .single();
+            
+          if (tableData?.is_locked) {
+            return (
+              <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6 text-center selection:bg-[#6DBE45] selection:text-white">
+                <UtensilsCrossed className="mb-4 h-16 w-16 text-slate-300" strokeWidth={1.5} />
+                <h1 className="mb-2 text-xl font-bold text-slate-900">Digital Ordering Paused.</h1>
+                <p className="max-w-xs text-sm text-slate-500">
+                  Please place your order or request assistance directly with our staff at the counter. Thank you!
+                </p>
+              </div>
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse qb_table_context cookie', e);
+    }
+  }
+
+  if (!isSessionValid || !tableContext.restaurantId || !tableContext.tableNumber) {
+    // If the session is totally invalid/missing, we can drop them into a hard error state.
+    // Or we can pass isSessionValid=false down to the client so they see Read-Only mode.
+    // Let's pass it down so they can still browse the menu in Read-Only mode!
+    return (
+      <CustomerMenuClient 
+        restaurantSlug={restaurantSlug}
+        tableNumber={tableContext.tableNumber || 'Unknown'}
+        restaurantId={tableContext.restaurantId || ''}
+        isSessionValid={false}
+        tableId={tableContext.tableId || ''}
+        sessionId={sessionCookie || ''}
+      />
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-sm sm:max-w-md w-full text-center bg-white p-6 sm:p-8 rounded-xl sm:rounded-2xl shadow-lg">
-        <Scan size={48} className="sm:w-15 sm:h-15 mx-auto text-blue-500 mb-4 sm:mb-6" />
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">
-          Welcome to {restaurant?.restaurant_name || 'Our Restaurant'}!
-        </h1>
-        <p className="text-gray-600 text-base sm:text-lg mb-6 sm:mb-8">
-          To view the menu and place an order, please scan the QR code located at your table.
-        </p>
-        {!restaurant && (
-          <div className="bg-yellow-50 p-3 sm:p-4 rounded-lg mb-4">
-            <p className="font-semibold text-yellow-800 text-sm sm:text-base">
-              Restaurant not found or not configured yet.
-            </p>
-          </div>
-        )}
-        <div className="bg-blue-50 p-3 sm:p-4 rounded-lg">
-          <p className="font-semibold text-blue-800 text-sm sm:text-base">
-            Looking for the dashboard?
-          </p>
-          <Link href="/login" className="text-blue-600 hover:underline text-sm sm:text-base">
-            Restaurant Login
-          </Link>
-        </div>
-      </div>
-    </div>
+    <CustomerMenuClient 
+      restaurantSlug={restaurantSlug}
+      tableNumber={tableContext.tableNumber as string}
+      restaurantId={tableContext.restaurantId as string}
+      isSessionValid={isSessionValid}
+      tableId={tableContext.tableId as string}
+      sessionId={sessionCookie as string}
+    />
   );
 }
