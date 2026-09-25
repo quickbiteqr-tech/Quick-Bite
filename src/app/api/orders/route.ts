@@ -24,6 +24,7 @@ const orderSchema = z.object({
   tableId: z.string().uuid("Invalid table ID"),
   totalAmount: z.number().optional(), // Ignored by the server
   cartItems: z.array(cartItemSchema).min(1, "Cart cannot be empty"),
+  deviceId: z.string().optional(),
 });
 
 // GET all orders for logged-in restaurant
@@ -76,7 +77,21 @@ export async function POST(req: Request) {
     );
   }
 
-  const { restaurantId, tableId, cartItems } = validatedData.data;
+  const { restaurantId, tableId, cartItems, deviceId } = validatedData.data;
+
+  // 0. Check Device Ban (No Phantom 200 OK for orders)
+  if (deviceId) {
+    const { data: bannedDevice } = await supabase
+      .from('banned_devices')
+      .select('device_id')
+      .eq('device_id', deviceId)
+      .eq('restaurant_id', restaurantId)
+      .single();
+
+    if (bannedDevice) {
+      return NextResponse.json({ error: 'Device Restricted' }, { status: 403 });
+    }
+  }
 
   // 1. Fetch authentic base prices from the database for this specific restaurant
   const menuItemIds = cartItems.map((item) => item.id);

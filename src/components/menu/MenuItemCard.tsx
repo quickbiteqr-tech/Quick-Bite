@@ -119,6 +119,51 @@ export default function MenuItemCard({ item, onEdit, onDelete }: MenuItemCardPro
                 {item.description || 'No description provided for this dish.'}
               </p>
               <p className="mt-4 text-lg font-bold text-[#6DBE45]">{formatPrice(item.price)}</p>
+
+              {item.variants && item.variants.length > 0 && (
+                <div className="mt-6 border-t border-slate-100 pt-4">
+                  <h4 className="mb-2 font-bold text-slate-800 text-sm uppercase tracking-wide">Variants (Sizes)</h4>
+                  <div className="flex flex-col gap-2">
+                    {item.variants.map((v) => (
+                      <div key={v.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <span className="font-semibold text-slate-700 text-sm">{v.label}</span>
+                        <span className="font-bold text-slate-900 text-sm">{formatPrice(Number(v.price))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {item.modifier_groups && item.modifier_groups.length > 0 && (
+                <div className="mt-6 border-t border-slate-100 pt-4">
+                  <h4 className="mb-3 font-bold text-slate-800 text-sm uppercase tracking-wide">Modifiers</h4>
+                  <div className="flex flex-col gap-4">
+                    {item.modifier_groups.map((group) => (
+                      <div key={group.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-slate-800">{group.name}</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-200 px-2 py-0.5 rounded-md">
+                            {group.is_required ? 'Required' : 'Optional'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-3 font-medium">
+                          Select {(group.min_selection ?? 0) > 0 ? `at least ${group.min_selection}` : 'up to'} {group.max_selection ?? 1}
+                        </p>
+                        {group.options && group.options.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            {group.options.map((opt) => (
+                              <div key={opt.id} className="flex justify-between items-center py-1.5 border-b border-slate-200/60 last:border-0 last:pb-0">
+                                <span className="text-sm font-medium text-slate-700">{opt.name}</span>
+                                <span className="text-sm font-bold text-slate-600">{Number(opt.price) > 0 ? `+${formatPrice(Number(opt.price))}` : 'Free'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
           </div>

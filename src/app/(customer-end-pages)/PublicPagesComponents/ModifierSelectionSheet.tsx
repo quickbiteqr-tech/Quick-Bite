@@ -125,7 +125,7 @@ export default function ModifierSelectionSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-[1400] bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
           />
 
           {/* Sheet */}
@@ -134,7 +134,7 @@ export default function ModifierSelectionSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed bottom-0 left-0 right-0 z-[1410] flex max-h-[85vh] flex-col rounded-t-3xl bg-white shadow-2xl"
+            className="fixed bottom-0 left-0 right-0 z-[51] flex max-h-[85vh] flex-col rounded-t-3xl bg-white shadow-2xl"
           >
             {/* Header */}
             <div className="flex shrink-0 items-start justify-between border-b border-slate-100 p-5 pb-4">

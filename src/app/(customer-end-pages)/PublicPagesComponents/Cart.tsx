@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useCartStore } from '@/app/(customer-end-pages)/store/cartStore';
 import CartItem from './CartItem';
-import { X, ShoppingCart, Loader2, Landmark } from 'lucide-react';
+import { X, ShoppingCart, Loader2, Landmark, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
 interface CartProps {
@@ -25,6 +26,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
   const [isLoading, setIsLoading] = useState<LoadingState>(null);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [modalState, setModalState] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
   
   // Refs to track component state and prevent memory leaks
   const isMountedRef = useRef(true);
@@ -110,6 +112,11 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
     setIsLoading('table');
     setErrorMessage(null);
 
+    let deviceId = undefined;
+    if (typeof window !== 'undefined') {
+      deviceId = localStorage.getItem('qb_device_id') || undefined;
+    }
+
     try {
       const data = await handleApiCall('/api/orders/postpaid', {
         cartItems: items,
@@ -117,6 +124,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
         tableNumber,
         totalAmount: totalPrice(),
         idempotencyKey: idempotencyKeyRef.current,
+        deviceId,
       });
 
       if (data?.success && data?.trackCode) {
@@ -130,12 +138,19 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
         throw new Error(data?.error || 'Failed to place postpaid order.');
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error 
+      const errMsg = error instanceof Error 
         ? error.message 
         : 'An error occurred while placing your order.';
       
       console.error('Pay on table error:', error);
-      safeSetState(() => setErrorMessage(errorMessage));
+      safeSetState(() => {
+        setErrorMessage(errMsg);
+        setModalState({
+          type: 'error',
+          title: 'Order Failed',
+          message: errMsg,
+        });
+      });
       // Reset processing flag on error so user can retry
       isProcessingRef.current = false;
     } finally {
@@ -167,11 +182,11 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
   return (
     <>
       <div
-        className={`fixed inset-0 bg-black/45 backdrop-blur-[1px] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'} z-[1190]`}
+        className={`fixed inset-0 bg-black/45 backdrop-blur-[1px] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'} z-50`}
         onClick={handleClose}
       />
       <div
-        className={`fixed bottom-0 left-0 right-0 z-[1200] mx-auto h-[85vh] w-full max-w-2xl rounded-t-3xl border border-gray-100 bg-white shadow-2xl transition-transform duration-300 ${isOpen ? 'translate-y-0 animate-slide-up' : 'translate-y-full'}`}
+        className={`fixed bottom-0 left-0 right-0 z-[51] mx-auto h-[85vh] w-full max-w-2xl rounded-t-3xl border border-gray-100 bg-white shadow-2xl transition-transform duration-300 ${isOpen ? 'translate-y-0 animate-slide-up' : 'translate-y-full'}`}
       >
         <div className="flex flex-col h-full">
           <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-100">
@@ -252,6 +267,48 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
           )}
         </div>
       </div>
+
+      {/* Success/Error Feedback Modal */}
+      <AnimatePresence>
+        {modalState && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setModalState(null)}
+              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-6 text-center">
+                  <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${modalState.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                    {modalState.type === 'success' ? <CheckCircle2 size={32} /> : <AlertCircle size={32} />}
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">
+                    {modalState.title}
+                  </h3>
+                  <p className="text-sm text-slate-600 leading-relaxed mb-8">
+                    {modalState.message}
+                  </p>
+                  
+                  <button
+                    onClick={() => setModalState(null)}
+                    className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm active:scale-[0.98] transition-transform ${modalState.type === 'success' ? 'bg-[#6DBE45] hover:bg-[#5aa337]' : 'bg-slate-900 hover:bg-slate-800'}`}
+                  >
+                    Got it
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

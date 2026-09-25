@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMenuItems } from '@/lib/hooks/useMenuItems';
+import { getMenuItem } from '@/lib/api/menu';
 import MenuItemForm from '@/components/menu/MenuItemForm';
 import { Loader2 } from 'lucide-react';
 import { MenuItem } from '@/types/menu';
@@ -11,7 +12,7 @@ import { toast } from 'sonner';
 export default function EditMenuItemPage() {
   const params = useParams();
   const router = useRouter();
-  const { menuItems, updateMenuItem, loading: menuItemsLoading } = useMenuItems();
+  const { updateMenuItem } = useMenuItems();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [menuItem, setMenuItem] = useState<MenuItem | null>(null);
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -19,16 +20,20 @@ export default function EditMenuItemPage() {
   const itemId = params.id as string;
 
   useEffect(() => {
-    if (!menuItemsLoading && menuItems.length > 0) {
-      const itemToEdit = menuItems.find((item) => String(item.id) === String(itemId));
-      if (itemToEdit) {
-        setMenuItem(itemToEdit);
+    async function fetchItem() {
+      try {
+        if (itemId) {
+          const item = await getMenuItem(itemId);
+          setMenuItem(item);
+        }
+      } catch (error) {
+        console.error("Failed to load full menu item details:", error);
+      } finally {
+        setIsPageLoading(false);
       }
-      setIsPageLoading(false);
-    } else if (!menuItemsLoading) {
-      setIsPageLoading(false);
     }
-  }, [menuItems, itemId, menuItemsLoading]);
+    fetchItem();
+  }, [itemId]);
 
   const handleSubmit = async (data: Omit<MenuItem, 'id' | 'restaurant_id' | 'created_at'>) => {
     if (!menuItem) return;
