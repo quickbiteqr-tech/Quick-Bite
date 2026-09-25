@@ -1,46 +1,29 @@
 'use client';
-import { X, Download, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { X, Download } from 'lucide-react';
+import QRCodeGenerator from './tables/QRCodeGenerator';
 
 interface QRModalProps {
   isOpen: boolean;
   onClose: () => void;
-  qrUrl: string;
-  tableNumber?: number;
+  tableId?: string;
+  tableName?: string;
 }
 
-export default function QRModal({ isOpen, onClose, qrUrl, tableNumber }: QRModalProps) {
-  if (!isOpen) return null;
-  const [loading, setLoading ] = useState<boolean>(false);
+export default function QRModal({ isOpen, onClose, tableId, tableName }: QRModalProps) {
+  if (!isOpen || !tableId) return null;
 
-  const handleDownload = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(qrUrl);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `table-${tableNumber || 'qr'}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error("Failed to download image", error);
-    }
-    finally{
-        setLoading(false);
+  const handleDownload = () => {
+    const canvas = document.getElementById(`qr-${tableId}`) as HTMLCanvasElement;
+    if (canvas) {
+      const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+      let downloadLink = document.createElement("a");
+      downloadLink.href = pngUrl;
+      downloadLink.download = `table-${tableName || 'qr'}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
     }
   };
-
-  if(loading){
-    return (
-        <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-[#6DBE45]" aria-hidden />
-      </div>
-    )
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
@@ -48,7 +31,7 @@ export default function QRModal({ isOpen, onClose, qrUrl, tableNumber }: QRModal
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 p-4">
           <h3 className="font-semibold text-slate-800">
-            {tableNumber ? `Table ${tableNumber} QR` : 'QR Code'}
+            {tableName ? `Table ${tableName} QR` : 'QR Code'}
           </h3>
           <button
             onClick={onClose}
@@ -61,11 +44,11 @@ export default function QRModal({ isOpen, onClose, qrUrl, tableNumber }: QRModal
         {/* Body */}
         <div className="flex flex-col items-center p-6">
           <div className="mb-6 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2 shadow-inner">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src={qrUrl} 
-              alt={`QR Code for Table ${tableNumber}`} 
-              className="h-48 w-48 object-contain mix-blend-multiply"
+            <QRCodeGenerator 
+              tableId={tableId} 
+              tableName={tableName || ''} 
+              size={192} // slightly larger for the modal
+              className="border-none !bg-transparent p-0" 
             />
           </div>
           

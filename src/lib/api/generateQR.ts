@@ -13,6 +13,6 @@ export const generateQR = async (restaurantSlug: string, restaurantId: string, t
     throw new Error(`Failed to generate QR: ${errorText}`);
   }
 
-  const { qrCodeUrl } = await res.json();
-  return qrCodeUrl;
+  const { qrCodeUrl, tableId } = await res.json();
+  return { qrCodeUrl, tableId };
 };
