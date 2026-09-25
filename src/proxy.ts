@@ -80,6 +80,23 @@ export async function proxy(request: NextRequest) {
     console.warn('⚠️ Error in middleware Supabase client:', error);
   }
 
+  // ─── NEW: Waiter Bell (Diner Session) ───
+  if (pathname.startsWith('/restaurant/')) {
+    let sessionId = request.cookies.get('diner_session_id')?.value;
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      response.cookies.set({
+        name: 'diner_session_id',
+        value: sessionId,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 10800,
+        path: '/',
+      });
+    }
+  }
+
   return response;
 }
 
