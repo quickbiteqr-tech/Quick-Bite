@@ -131,6 +131,10 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
       if (data?.success && data?.trackCode) {
         setOrderSuccess(true);
         clearCart();
+        
+        // REGENERATE the idempotency key for future orders in the same session
+        idempotencyKeyRef.current = crypto.randomUUID();
+        
         // Trigger global checkout store updates
         useCheckoutStore.getState().fetchActiveSession();
         // Small delay to show success state before opening drawer

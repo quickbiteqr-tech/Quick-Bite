@@ -80,6 +80,12 @@ export default function CustomerMenuClient({
   const { totalItems, items } = useCartStore();
   const totalPrice = items.reduce((sum, cartItem) => sum + ((cartItem.unitPrice || cartItem.price) * cartItem.quantity), 0);
 
+  const isActiveBillVisible = useCheckoutStore((state) => state.hasActiveOrders);
+  const isCheckoutSheetOpen = useCheckoutStore((state) => state.isCheckoutSheetOpen);
+
+  const isCartBarVisible = totalItems() > 0;
+  const hideAllFloatingUI = isCartOpen || isWaiterBellOpen || isCheckoutSheetOpen;
+
   useEffect(() => {
     if (!restaurantSlug || !tableNumber) {
         setError("Missing restaurant or table information.");
@@ -401,12 +407,18 @@ export default function CustomerMenuClient({
           restaurantId={restaurantDetails.id}
           tableNumber={tableNumber}
           onOpenChange={setIsWaiterBellOpen}
+          isHidden={hideAllFloatingUI}
+          isCartBarVisible={isCartBarVisible}
+          isActiveBillVisible={isActiveBillVisible}
         />
       )}
 
       {!isReadOnly && (
         <>
-          <ActiveBillFloatingBar isHidden={isCartOpen || isWaiterBellOpen} />
+          <ActiveBillFloatingBar 
+            isHidden={hideAllFloatingUI} 
+            isCartBarVisible={isCartBarVisible} 
+          />
           <CheckoutSheet />
         </>
       )}

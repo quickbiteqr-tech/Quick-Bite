@@ -9,9 +9,19 @@ interface WaiterBellProps {
   restaurantId: string;
   tableNumber: string;
   onOpenChange?: (isOpen: boolean) => void;
+  isHidden?: boolean;
+  isCartBarVisible?: boolean;
+  isActiveBillVisible?: boolean;
 }
 
-export default function WaiterBell({ restaurantId, tableNumber, onOpenChange }: WaiterBellProps) {
+export default function WaiterBell({ 
+  restaurantId, 
+  tableNumber, 
+  onOpenChange,
+  isHidden,
+  isCartBarVisible,
+  isActiveBillVisible
+}: WaiterBellProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -104,7 +114,14 @@ export default function WaiterBell({ restaurantId, tableNumber, onOpenChange }: 
   return (
     <>
       {/* Floating Action Button */}
-      <div className="fixed bottom-24 right-4 z-[45] flex flex-col items-center">
+      <div 
+        className={`fixed right-4 z-[45] flex flex-col items-center transition-all duration-300 ease-in-out ${
+          isHidden ? 'opacity-0 pointer-events-none translate-y-10' : 'opacity-100 translate-y-0'
+        } ${
+          isCartBarVisible && isActiveBillVisible ? 'bottom-[150px]' : 
+          (isCartBarVisible || isActiveBillVisible) ? 'bottom-[88px]' : 'bottom-6'
+        }`}
+      >
         {cooldown > 0 ? (
           <>
             <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#6DBE45] bg-white text-[#6DBE45] shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
