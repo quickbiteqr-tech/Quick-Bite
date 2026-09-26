@@ -47,31 +47,40 @@ export default function LiveServiceRequests() {
     }
   };
 
-  const [banCandidateId, setBanCandidateId] = useState<string | null>(null);
-  const [banCandidateTable, setBanCandidateTable] = useState<string>('');
+  const [warningModalState, setWarningModalState] = useState<{
+    show: boolean;
+    actionType: 'clear' | 'ban' | null;
+    tableNumber: string;
+    amount: number;
+    orders: any[];
+    targetId?: string; // used for ban
+  }>({ show: false, actionType: null, tableNumber: '', amount: 0, orders: [] });
+
+  const checkActiveBill = async (tableNumber: string): Promise<{amount: number, orders: any[]}> => {
+    try {
+      const res = await fetch(`/api/admin/tables/active-bill?tableNumber=${tableNumber}&restaurantId=${restaurantId}`);
+      if (res.ok) {
+        const data = await res.json();
+        return { amount: data.totalAmount || 0, orders: data.orders || [] };
+      }
+      return { amount: 0, orders: [] };
+    } catch {
+      return { amount: 0, orders: [] };
+    }
+  };
 
   const initiateBan = async (id: string, tableNumber: string) => {
-    // Check for active orders
-    const { data: activeOrders } = await supabase
-      .from('orders')
-      .select('id')
-      .eq('table_number', tableNumber)
-      .eq('restaurant_id', restaurantId)
-      .in('status', ['pending', 'accepted', 'served']); // but NOT 'paid' or 'cancelled'
-      
-    if (activeOrders && activeOrders.length > 0) {
-      // Intercept and show warning
-      setBanCandidateId(id);
-      setBanCandidateTable(tableNumber);
+    const { amount, orders } = await checkActiveBill(tableNumber);
+    if (amount > 0) {
+      setWarningModalState({ show: true, actionType: 'ban', tableNumber, amount, orders, targetId: id });
     } else {
-      // Safe to ban
       await executeBan(id);
     }
   };
 
   const executeBan = async (id: string) => {
     setRequests(prev => prev.filter(req => req.id !== id));
-    setBanCandidateId(null);
+    setWarningModalState(prev => ({ ...prev, show: false }));
 
     try {
       const res = await fetch('/api/admin/mark-spam', {
@@ -90,16 +99,19 @@ export default function LiveServiceRequests() {
     }
   };
 
-  const dismissBan = () => {
-    if (banCandidateId) {
-      handleAction(banCandidateId, 'ignored');
-      setBanCandidateId(null);
+  const handleClearTableClick = async (tableNumber: string) => {
+    const { amount, orders } = await checkActiveBill(tableNumber);
+    if (amount > 0) {
+      setWarningModalState({ show: true, actionType: 'clear', tableNumber, amount, orders });
+    } else {
+      if (confirm(`Clear Table ${tableNumber} and revoke all active diner sessions?`)) {
+        await executeClearTable(tableNumber);
+      }
     }
   };
 
-  const handleClearTable = async (tableNumber: string) => {
-    if (!confirm(`Clear Table ${tableNumber} and revoke all active diner sessions?`)) return;
-    
+  const executeClearTable = async (tableNumber: string) => {
+    setWarningModalState(prev => ({ ...prev, show: false }));
     setRequests(prev => prev.filter(req => req.table_number !== tableNumber));
 
     try {
@@ -124,6 +136,21 @@ export default function LiveServiceRequests() {
     } catch (e) {
       toast.error('Error clearing table.');
     }
+  };
+
+  const handleWarningConfirm = async () => {
+    if (warningModalState.actionType === 'ban' && warningModalState.targetId) {
+      await executeBan(warningModalState.targetId);
+    } else if (warningModalState.actionType === 'clear') {
+      await executeClearTable(warningModalState.tableNumber);
+    }
+  };
+
+  const dismissWarning = () => {
+    if (warningModalState.actionType === 'ban' && warningModalState.targetId) {
+      handleAction(warningModalState.targetId, 'ignored');
+    }
+    setWarningModalState(prev => ({ ...prev, show: false }));
   };
 
   const getIconForType = (type: string) => {
@@ -213,7 +240,7 @@ export default function LiveServiceRequests() {
                 </button>
                 
                 <button
-                  onClick={() => handleClearTable(req.table_number)}
+                  onClick={() => handleClearTableClick(req.table_number)}
                   className="ml-2 flex h-9 px-3 gap-1.5 items-center justify-center rounded-lg bg-rose-500 text-white shadow-sm transition hover:bg-rose-600 font-bold text-xs"
                 >
                   <Trash2 size={14} /> Clear Table
@@ -225,10 +252,13 @@ export default function LiveServiceRequests() {
       </div>
 
       <ActiveOrderWarningModal 
-        isOpen={!!banCandidateId} 
-        tableNumber={banCandidateTable} 
-        onDismiss={dismissBan} 
-        onForceBan={() => banCandidateId && executeBan(banCandidateId)} 
+        isOpen={warningModalState.show} 
+        tableNumber={warningModalState.tableNumber}
+        actionType={warningModalState.actionType}
+        unpaidAmount={warningModalState.amount}
+        orders={warningModalState.orders}
+        onDismiss={dismissWarning} 
+        onConfirm={handleWarningConfirm} 
       />
     </div>
   );

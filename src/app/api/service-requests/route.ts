@@ -103,7 +103,12 @@ export async function POST(req: Request) {
       .limit(1);
 
     if (recentRequests && recentRequests.length > 0) {
-      return NextResponse.json({ error: "You're doing that too fast! Please wait a moment before calling the staff again." }, { status: 429 });
+      const lastRequestTime = new Date(recentRequests[0].created_at).getTime();
+      const remainingSeconds = Math.ceil((lastRequestTime + 60000 - Date.now()) / 1000);
+      return NextResponse.json({ 
+        error: "You're doing that too fast! Please wait a moment before calling the staff again.",
+        remainingSeconds: remainingSeconds > 0 ? remainingSeconds : 60
+      }, { status: 429 });
     }
 
     // 4. Insert Request

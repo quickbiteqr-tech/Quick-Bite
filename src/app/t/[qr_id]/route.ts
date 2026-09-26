@@ -89,7 +89,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ qr_id: s
       ? tableRecord.restaurants[0].slug 
       : (tableRecord.restaurants as any).slug;
 
-    return NextResponse.redirect(new URL(`/restaurant/${restaurantSlug}`, req.url));
+    return NextResponse.redirect(new URL(`/restaurant/${restaurantSlug}/table/${tableRecord.table_number}`, req.url));
 
   } catch (error) {
     console.error('QR Routing Exception:', error);

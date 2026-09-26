@@ -10,16 +10,32 @@ import AuthListener from "@/components/AuthListener";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Quick Bite QR - Restaurant Management",
-  description: "Restaurant management and QR code generation app",
+  title: "QuickBiteQR - Zero Commission Digital Dining",
+  description: "Seamlessly order, split bills, and pay via UPI directly from your table. No app required.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Quick Bite QR",
+    title: "QuickBiteQR",
   },
   formatDetection: {
     telephone: false,
+  },
+  openGraph: {
+    title: "QuickBiteQR - Zero Commission Digital Dining",
+    description: "Seamlessly order, split bills, and pay via UPI directly from your table. No app required.",
+    url: "https://quickbiteqr.co.in",
+    siteName: "QuickBiteQR",
+    images: [
+      {
+        url: "https://quickbiteqr.co.in/og-image.jpg", // Create this image and place in public/og-image.jpg
+        width: 1200,
+        height: 630,
+        alt: "QuickBiteQR - Scan, Order, Pay",
+      }
+    ],
+    locale: "en_IN",
+    type: "website",
   },
 };
 

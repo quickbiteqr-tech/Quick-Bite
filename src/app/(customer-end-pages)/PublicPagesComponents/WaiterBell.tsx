@@ -8,14 +8,32 @@ import { toast } from 'sonner';
 interface WaiterBellProps {
   restaurantId: string;
   tableNumber: string;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
-export default function WaiterBell({ restaurantId, tableNumber }: WaiterBellProps) {
+export default function WaiterBell({ restaurantId, tableNumber, onOpenChange }: WaiterBellProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
   const [cooldown, setCooldown] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [modalState, setModalState] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
+
+  useEffect(() => {
+    // On mount, check if there's a stored timestamp
+    const lastRing = localStorage.getItem(`qb_bell_${tableNumber}`);
+    if (lastRing) {
+      const elapsed = Math.floor((Date.now() - parseInt(lastRing, 10)) / 1000);
+      if (elapsed < 60) {
+        setCooldown(60 - elapsed);
+      } else {
+        localStorage.removeItem(`qb_bell_${tableNumber}`);
+      }
+    }
+  }, [tableNumber]);
 
   useEffect(() => {
     if (cooldown > 0) {
@@ -43,12 +61,20 @@ export default function WaiterBell({ restaurantId, tableNumber }: WaiterBellProp
 
       const data = await res.json();
       
+      if (res.status === 429 && data.remainingSeconds) {
+        setIsOpen(false);
+        setCooldown(data.remainingSeconds);
+        localStorage.setItem(`qb_bell_${tableNumber}`, (Date.now() - (60 - data.remainingSeconds) * 1000).toString());
+        throw new Error(data.error || 'Too many requests.');
+      }
+
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send request.');
       }
       
       setIsOpen(false);
       setCooldown(60);
+      localStorage.setItem(`qb_bell_${tableNumber}`, Date.now().toString());
       
       setModalState({
         type: 'success',

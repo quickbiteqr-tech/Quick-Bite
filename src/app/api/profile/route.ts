@@ -66,6 +66,7 @@ export async function PUT(req: Request) {
     "whatsapp",
     "opening_time",
     "closing_time",
+    "upi_id",
   ] as const;
 
   const updates: Record<string, unknown> = {

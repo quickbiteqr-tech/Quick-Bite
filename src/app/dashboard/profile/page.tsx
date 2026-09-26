@@ -14,7 +14,7 @@ export default async function ProfilePage() {
 
   const { data: restaurant } = await supabase
     .from('restaurants')
-    .select('restaurant_name, logo_url, phone, address, description, slug')
+    .select('restaurant_name, logo_url, phone, address, description, slug, upi_id')
     .eq('user_id', user.id)
     .maybeSingle();
 

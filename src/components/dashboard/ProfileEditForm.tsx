@@ -21,6 +21,7 @@ export type ProfileRestaurantInitial = {
   phone: string | null;
   address: string | null;
   description: string | null;
+  upi_id?: string | null;
   slug?: string | null;
 };
 
@@ -56,6 +57,7 @@ export function ProfileEditForm({
   const [phone, setPhone] = useState(restaurant?.phone ?? signupPhone ?? '');
   const [address, setAddress] = useState(restaurant?.address ?? signupAddress ?? '');
   const [description, setDescription] = useState(restaurant?.description ?? '');
+  const [upiId, setUpiId] = useState(restaurant?.upi_id ?? '');
   const [saving, setSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
@@ -159,11 +161,12 @@ export function ProfileEditForm({
       }
 
       const trimmedLogo = logoUrl.trim();
-      const profilePayload: Partial<Restaurant> = {
+      const profilePayload: Partial<Restaurant & { upi_id?: string }> = {
         restaurant_name: restaurantName.trim(),
         phone: phone.trim() || undefined,
         address: address.trim() || undefined,
         description: description.trim() || undefined,
+        upi_id: upiId.trim() || undefined,
       };
       if (trimmedLogo) {
         profilePayload.logo_url = trimmedLogo;
@@ -312,6 +315,20 @@ export function ProfileEditForm({
                 Pre-filled from your signup details.
               </p>
             ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="upi-id">UPI ID (for payments)</Label>
+            <Input
+              id="upi-id"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value)}
+              placeholder="e.g. restaurant@okaxis"
+              type="text"
+            />
+            <p className="text-xs text-slate-500">
+              Used to generate UPI QR codes and deep links for your customers to pay you directly.
+            </p>
           </div>
 
           <div className="space-y-2">

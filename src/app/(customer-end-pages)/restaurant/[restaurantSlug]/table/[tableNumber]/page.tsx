@@ -8,7 +8,10 @@ import CustomerMenuItemCard from '@/app/(customer-end-pages)/PublicPagesComponen
 import RestaurantLogoCircle from '@/app/(customer-end-pages)/PublicPagesComponents/RestaurantLogoCircle';
 import Cart from '@/app/(customer-end-pages)/PublicPagesComponents/Cart';
 import WaiterBell from '@/app/(customer-end-pages)/PublicPagesComponents/WaiterBell';
+import ActiveBillFloatingBar from '@/app/(customer-end-pages)/PublicPagesComponents/ActiveBillFloatingBar';
+import CheckoutSheet from '@/app/(customer-end-pages)/PublicPagesComponents/CheckoutSheet';
 import { useCartStore } from '@/app/(customer-end-pages)/store/cartStore';
+import { useCheckoutStore } from '@/lib/store/useCheckoutStore';
 import { MenuItem as BaseMenuItem } from '@/types/menu';
 import {
   ShoppingCart,
@@ -32,6 +35,7 @@ interface RestaurantDetails {
   email?: string | null;
   address?: string | null;
   description?: string | null;
+  upi_id?: string | null;
 }
 interface MenuItem extends BaseMenuItem {
   category?: string;
@@ -77,6 +81,7 @@ export default function CustomerMenuPage() {
           throw new Error(`Could not find a restaurant with the slug: "${restaurantSlug}"`);
         }
         setRestaurantDetails(details);
+        useCheckoutStore.getState().setRestaurantDetails(details.upi_id || '', details.restaurant_name || '');
         setMenuItems(items || []);
 
         // Verify session for Read-Only mode
@@ -373,6 +378,13 @@ export default function CustomerMenuPage() {
           restaurantId={restaurantDetails.id}
           tableNumber={tableNumber}
         />
+      )}
+
+      {!isReadOnly && (
+        <>
+          <ActiveBillFloatingBar />
+          <CheckoutSheet />
+        </>
       )}
 
       <div

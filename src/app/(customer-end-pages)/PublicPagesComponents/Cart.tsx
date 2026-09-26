@@ -6,6 +6,7 @@ import CartItem from './CartItem';
 import { X, ShoppingCart, Loader2, Landmark, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { useCheckoutStore } from '@/lib/store/useCheckoutStore';
 
 interface CartProps {
   isOpen: boolean;
@@ -130,9 +131,12 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
       if (data?.success && data?.trackCode) {
         setOrderSuccess(true);
         clearCart();
-        // Small delay to show success state before redirect
+        // Trigger global checkout store updates
+        useCheckoutStore.getState().fetchActiveSession();
+        // Small delay to show success state before opening drawer
         setTimeout(() => {
-          router.push(`/restaurant/${restaurantSlug}/orders/${data.trackCode}`);
+          handleClose();
+          useCheckoutStore.getState().setCheckoutSheetOpen(true);
         }, 500);
       } else {
         throw new Error(data?.error || 'Failed to place postpaid order.');

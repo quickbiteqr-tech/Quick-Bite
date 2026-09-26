@@ -14,4 +14,5 @@ export interface Restaurant {
   banner_url?: string
   is_active?: boolean
   owner_name?: string
+  upi_id?: string | null
 }

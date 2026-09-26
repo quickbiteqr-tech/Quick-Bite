@@ -41,11 +41,21 @@ export async function POST(req: Request) {
     }
 
     // 2.5 Nullify current_session_id on the table
-    await supabase
+    const { data: tableData } = await supabase
       .from('tables')
       .update({ current_session_id: null })
       .eq('restaurant_id', restaurantId)
-      .eq('table_number', String(tableNumber));
+      .eq('table_number', String(tableNumber))
+      .select('id')
+      .single();
+
+    if (tableData) {
+      await supabase
+        .from('orders')
+        .update({ status: 'complete' })
+        .eq('table_id', tableData.id)
+        .not('status', 'in', '("complete", "cancelled")');
+    }
 
     // 3. Mark service requests as ignored/resolved? (Optional, maybe clear them)
     await supabase

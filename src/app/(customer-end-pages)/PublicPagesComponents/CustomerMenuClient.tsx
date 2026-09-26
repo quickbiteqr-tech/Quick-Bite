@@ -7,7 +7,10 @@ import CustomerMenuItemCard from '@/app/(customer-end-pages)/PublicPagesComponen
 import RestaurantLogoCircle from '@/app/(customer-end-pages)/PublicPagesComponents/RestaurantLogoCircle';
 import Cart from '@/app/(customer-end-pages)/PublicPagesComponents/Cart';
 import WaiterBell from '@/app/(customer-end-pages)/PublicPagesComponents/WaiterBell';
+import ActiveBillFloatingBar from '@/app/(customer-end-pages)/PublicPagesComponents/ActiveBillFloatingBar';
+import CheckoutSheet from '@/app/(customer-end-pages)/PublicPagesComponents/CheckoutSheet';
 import { useCartStore } from '@/app/(customer-end-pages)/store/cartStore';
+import { useCheckoutStore } from '@/lib/store/useCheckoutStore';
 import { useDinerRealtimeSync } from '@/lib/hooks/useDinerRealtimeSync';
 import { MenuItem as BaseMenuItem } from '@/types/menu';
 import {
@@ -31,6 +34,7 @@ interface RestaurantDetails {
   email?: string | null;
   address?: string | null;
   description?: string | null;
+  upi_id?: string | null;
 }
 interface MenuItem extends BaseMenuItem {
   category?: string;
@@ -63,6 +67,7 @@ export default function CustomerMenuClient({
   const [isProfileSidebarOpen, setIsProfileSidebarOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   
+  const [isWaiterBellOpen, setIsWaiterBellOpen] = useState(false);
   const { isLockedByRealtime, isSessionRevoked } = useDinerRealtimeSync(tableId, sessionId);
 
   // We use the prop to decide Read-Only state, but we also allow setting it 
@@ -90,6 +95,7 @@ export default function CustomerMenuClient({
           throw new Error(`Could not find a restaurant with the slug: "${restaurantSlug}"`);
         }
         setRestaurantDetails(details);
+        useCheckoutStore.getState().setRestaurantDetails(details.upi_id || '', details.restaurant_name || '');
         setMenuItems(items || []);
 
         if (!isSessionValid) {
@@ -394,7 +400,15 @@ export default function CustomerMenuClient({
         <WaiterBell
           restaurantId={restaurantDetails.id}
           tableNumber={tableNumber}
+          onOpenChange={setIsWaiterBellOpen}
         />
+      )}
+
+      {!isReadOnly && (
+        <>
+          <ActiveBillFloatingBar isHidden={isCartOpen || isWaiterBellOpen} />
+          <CheckoutSheet />
+        </>
       )}
 
       <div
