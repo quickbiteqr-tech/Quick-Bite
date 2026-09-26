@@ -37,7 +37,7 @@ export default function ActiveBillFloatingBar({ isHidden, isCartBarVisible }: Ac
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ type: "spring", damping: 20, stiffness: 200 }}
-          className={`fixed left-0 right-0 px-4 z-[90] flex justify-center pointer-events-none mb-1 transition-all duration-300 ease-in-out ${isCartBarVisible ? 'bottom-[84px]' : 'bottom-4'}`}
+          className={`fixed left-0 right-0 px-4 z-[10] flex justify-center pointer-events-none mb-1 transition-all duration-300 ease-in-out bottom-[84px] ${isHidden ? 'opacity-0 pointer-events-none translate-y-10' : 'opacity-100 translate-y-0'}`}
         >
           <button
             onClick={() => setCheckoutSheetOpen(true)}

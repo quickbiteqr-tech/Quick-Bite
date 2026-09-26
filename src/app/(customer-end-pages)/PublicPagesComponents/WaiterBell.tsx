@@ -115,11 +115,8 @@ export default function WaiterBell({
     <>
       {/* Floating Action Button */}
       <div 
-        className={`fixed right-4 z-[45] flex flex-col items-center transition-all duration-300 ease-in-out ${
+        className={`fixed right-4 z-[45] flex flex-col items-center transition-all duration-300 ease-in-out bottom-[150px] ${
           isHidden ? 'opacity-0 pointer-events-none translate-y-10' : 'opacity-100 translate-y-0'
-        } ${
-          isCartBarVisible && isActiveBillVisible ? 'bottom-[150px]' : 
-          (isCartBarVisible || isActiveBillVisible) ? 'bottom-[88px]' : 'bottom-6'
         }`}
       >
         {cooldown > 0 ? (
