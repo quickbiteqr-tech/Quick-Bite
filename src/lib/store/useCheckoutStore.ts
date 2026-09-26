@@ -16,6 +16,7 @@ export interface ActiveOrder {
   id: string;
   track_code: string;
   status: string;
+  is_paid: boolean;
   total_amount: number;
   estimated_time?: number | null;
   created_at: string;

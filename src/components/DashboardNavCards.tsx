@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { LogOut, UserCircle2, Shield } from "lucide-react";
+import { LogOut, UserCircle2, Shield, Receipt } from "lucide-react";
 import { logout } from "@/lib/auth/logout";
 import { supabase } from "@/lib/supabase/client";
 
@@ -98,6 +98,16 @@ export function DashboardNavCards({ onClose }: DashboardNavCardsProps) {
         <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-800">Orders</div>
           <div className="text-xs text-slate-500">Live queue</div>
+        </div>
+      </Link>
+
+      <Link href="/dashboard/billing" onClick={handleLinkClick} className={navItemClass}>
+        <div className={iconWrapClass}>
+          <Receipt className="h-5 w-5 text-white" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-800">Billing</div>
+          <div className="text-xs text-slate-500">Active Tables</div>
         </div>
       </Link>
 

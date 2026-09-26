@@ -34,7 +34,6 @@ export interface OrderWithItems {
     status: string;
     total_amount: number;
     created_at: string;
-    is_prepaid?: boolean;
     estimated_time?: number | null;
     table_id?: number | null;
     restaurant_id?: string;

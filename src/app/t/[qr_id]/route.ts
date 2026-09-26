@@ -16,7 +16,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ qr_id: s
     // 1. Lookup the table using the qr_id (which is the table UUID)
     const { data: tableRecord, error: tableError } = await supabase
       .from('tables')
-      .select('id, table_number, restaurant_id, restaurants!inner(slug)')
+      .select('id, table_number, restaurant_id, current_session_id, restaurants!inner(slug)')
       .eq('id', qrId)
       .single();
 
@@ -24,18 +24,43 @@ export async function GET(req: Request, { params }: { params: Promise<{ qr_id: s
       console.error('QR Routing Error:', tableError);
       return NextResponse.redirect(new URL('/404', req.url));
     }
+    
+    // 1.5 Smart Gatekeeper: Table-Centric Session Sharing
+    const cookieStore = await cookies();
+    const restaurantSlug = Array.isArray(tableRecord.restaurants) 
+      ? tableRecord.restaurants[0].slug 
+      : (tableRecord.restaurants as any).slug;
 
-    // 2. Generate a unique diner_session_id
-    const dinerSessionId = crypto.randomUUID();
-
-    // 2.5 Use Service Role Client to bypass RLS for anonymous scanners
+    // Use Service Role Client to bypass RLS
     const { createClient } = await import('@supabase/supabase-js');
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // Save session ID to the table so we know the active session
+    let dinerSessionId = tableRecord.current_session_id;
+
+    if (dinerSessionId) {
+      // Check if this table has any active/unpaid orders
+      const { data: unpaidOrders } = await supabaseAdmin
+        .from('orders')
+        .select('id')
+        .eq('table_id', tableRecord.id)
+        .eq('is_paid', false)
+        .neq('status', 'cancelled')
+        .limit(1);
+
+      if (!unpaidOrders || unpaidOrders.length === 0) {
+        // Table has a session ID but no unpaid orders, meaning the previous diners left.
+        // We generate a new session.
+        dinerSessionId = crypto.randomUUID();
+      }
+    } else {
+      // No current session, generate a new one
+      dinerSessionId = crypto.randomUUID();
+    }
+
+    // Save session ID to the table (this handles both new sessions and re-affirming shared sessions)
     const { error: updateError } = await supabaseAdmin
       .from('tables')
       .update({ current_session_id: dinerSessionId })
@@ -53,7 +78,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ qr_id: s
     };
 
     // 4. Set secure cookies
-    const cookieStore = await cookies();
     const maxAge = 10800; // 3 hours
 
     cookieStore.set({
@@ -85,10 +109,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ qr_id: s
     });
 
     // 5. Redirect to the clean menu URL
-    const restaurantSlug = Array.isArray(tableRecord.restaurants) 
-      ? tableRecord.restaurants[0].slug 
-      : (tableRecord.restaurants as any).slug;
-
     return NextResponse.redirect(new URL(`/restaurant/${restaurantSlug}/table/${tableRecord.table_number}`, req.url));
 
   } catch (error) {

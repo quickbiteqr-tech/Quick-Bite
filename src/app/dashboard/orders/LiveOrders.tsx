@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase/client';
 import LiveOrdersComponent from '@/components/LiveOrdersComponent';
 export type OrderItemStatus = 'Pending' | 'Confirmed' | 'Preparing' | 'Serve' |  'Cancelled';
 
-// MODIFIED: Added is_prepaid to the order object
 export interface OrderItem {
   id: string;
   quantity: number;
@@ -20,7 +19,6 @@ export interface OrderItem {
     track_code: string | null;
     table_id: string | null;
     table_number: string | null;
-    is_prepaid: boolean;
     restaurant: { id: string; name: string; slug?: string | null; user_id: string };
   };
   menu_item: { id: string; name: string };
@@ -92,7 +90,7 @@ const LiveOrders = ({ embedded = false }: LiveOrdersProps) => {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, track_code, status, created_at, is_prepaid,
+          id, track_code, status, created_at,
           table:tables ( id, table_number ),
           restaurant:restaurants ( id, restaurant_name, slug, user_id ),
 order_items (
@@ -126,7 +124,6 @@ order_items (
               track_code: orderObj.track_code as string | null,
               table_id: orderObj.table ? String((orderObj.table as Record<string, unknown>).id) : null,
               table_number: (orderObj.table as Record<string, unknown>)?.table_number as string | null ?? null,
-              is_prepaid: orderObj.is_prepaid as boolean,
               restaurant: {
                 id: (orderObj.restaurant as Record<string, unknown>)?.id as string ?? '',
                 name: (orderObj.restaurant as Record<string, unknown>)?.restaurant_name as string ?? '',
