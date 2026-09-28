@@ -1,6 +1,8 @@
 import React from "react";
 import { SlimSidebar } from "@/components/v2/SlimSidebar";
 import { BottomNavBar } from "@/components/v2/BottomNavBar";
+import { GlobalRealtimeListener } from "@/components/v2/GlobalRealtimeListener";
+import { Toaster } from "sonner";
 
 export default function V2DashboardLayout({
   children,
@@ -18,6 +20,8 @@ export default function V2DashboardLayout({
       </main>
 
       <BottomNavBar />
+      <GlobalRealtimeListener />
+      <Toaster position="top-center" />
     </div>
   );
 }
