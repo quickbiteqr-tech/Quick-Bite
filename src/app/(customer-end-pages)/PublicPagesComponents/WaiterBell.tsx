@@ -14,9 +14,9 @@ interface WaiterBellProps {
   isActiveBillVisible?: boolean;
 }
 
-export default function WaiterBell({ 
-  restaurantId, 
-  tableNumber, 
+export default function WaiterBell({
+  restaurantId,
+  tableNumber,
   onOpenChange,
   isHidden,
   isCartBarVisible,
@@ -70,7 +70,7 @@ export default function WaiterBell({
       });
 
       const data = await res.json();
-      
+
       if (res.status === 429 && data.remainingSeconds) {
         setIsOpen(false);
         setCooldown(data.remainingSeconds);
@@ -81,17 +81,17 @@ export default function WaiterBell({
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send request.');
       }
-      
+
       setIsOpen(false);
       setCooldown(60);
       localStorage.setItem(`qb_bell_${tableNumber}`, Date.now().toString());
-      
+
       setModalState({
         type: 'success',
         title: 'Request Sent',
         message: `Your request for ${type} has been sent to the staff. They will be with you shortly.`,
       });
-      
+
     } catch (error: any) {
       setIsOpen(false);
       setModalState({
@@ -114,10 +114,9 @@ export default function WaiterBell({
   return (
     <>
       {/* Floating Action Button */}
-      <div 
-        className={`fixed right-4 z-[45] flex flex-col items-center transition-all duration-300 ease-in-out bottom-[150px] ${
-          isHidden ? 'opacity-0 pointer-events-none translate-y-10' : 'opacity-100 translate-y-0'
-        }`}
+      <div
+        className={`fixed right-4 z-[45] flex flex-col items-center transition-all duration-300 ease-in-out bottom-[150px] ${isHidden ? 'opacity-0 pointer-events-none translate-y-10' : 'opacity-100 translate-y-0'
+          }`}
       >
         {cooldown > 0 ? (
           <>
@@ -172,7 +171,7 @@ export default function WaiterBell({
               <h3 className="mb-5 text-lg font-bold text-slate-800 tracking-tight">
                 How can we help Table {tableNumber}?
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 {actions.map((action) => (
                   <button
@@ -219,7 +218,7 @@ export default function WaiterBell({
                   <p className="text-sm text-slate-600 leading-relaxed mb-8">
                     {modalState.message}
                   </p>
-                  
+
                   <button
                     onClick={() => setModalState(null)}
                     className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm active:scale-[0.98] transition-transform ${modalState.type === 'success' ? 'bg-[#6DBE45] hover:bg-[#5aa337]' : 'bg-slate-900 hover:bg-slate-800'}`}

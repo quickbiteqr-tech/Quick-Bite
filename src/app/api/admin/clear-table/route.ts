@@ -50,11 +50,21 @@ export async function POST(req: Request) {
       .single();
 
     if (tableData) {
-      await supabase
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      
+      const { error: archiveError } = await supabaseAdmin
         .from('orders')
-        .update({ status: 'complete' })
+        .update({ is_archived: true })
         .eq('table_id', tableData.id)
-        .not('status', 'in', '("complete", "cancelled")');
+        .eq('is_archived', false);
+        
+      if (archiveError) {
+        console.error('Failed to archive orders:', archiveError);
+      }
     }
 
     // 3. Mark service requests as ignored/resolved? (Optional, maybe clear them)

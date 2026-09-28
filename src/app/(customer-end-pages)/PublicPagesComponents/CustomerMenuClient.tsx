@@ -66,7 +66,7 @@ export default function CustomerMenuClient({
   const [activeDietaryTag, setActiveDietaryTag] = useState<string | null>(null);
   const [isProfileSidebarOpen, setIsProfileSidebarOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  
+
   const [isWaiterBellOpen, setIsWaiterBellOpen] = useState(false);
   const { isLockedByRealtime, isSessionRevoked } = useDinerRealtimeSync(tableId, sessionId);
 
@@ -74,7 +74,7 @@ export default function CustomerMenuClient({
   // if another check fails (though we already checked on the server)
   const [isReadOnlyState, setIsReadOnlyState] = useState(!isSessionValid);
   const isReadOnly = isReadOnlyState || isSessionRevoked;
-  
+
   const dietaryOptions = ['Veg', 'Non-Veg', 'Egg', 'Vegan', 'Jain', 'Gluten-Free'];
 
   const { totalItems, items } = useCartStore();
@@ -88,9 +88,9 @@ export default function CustomerMenuClient({
 
   useEffect(() => {
     if (!restaurantSlug || !tableNumber) {
-        setError("Missing restaurant or table information.");
-        setIsLoading(false);
-        return;
+      setError("Missing restaurant or table information.");
+      setIsLoading(false);
+      return;
     }
     const fetchData = async () => {
       setIsLoading(true);
@@ -125,15 +125,15 @@ export default function CustomerMenuClient({
       }
     }
   }, [restaurantSlug, tableNumber, isSessionValid]);
-  
+
   const filteredItems = menuItems.filter((item) => {
     if (!item.name || !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    
+
     if (activeDietaryTag) {
       const lowerFilter = activeDietaryTag.toLowerCase();
       // Safe check for dietary_tags property since it might not be in the strict MenuItem type yet
       const tags = ('dietary_tags' in item ? (item as any).dietary_tags : []) || [];
-      
+
       if (lowerFilter === 'veg') {
         if (item.is_veg !== true && !tags.includes('veg')) return false;
       } else if (lowerFilter === 'non-veg') {
@@ -154,7 +154,7 @@ export default function CustomerMenuClient({
 
   const categoryOrder = Object.keys(groupedMenu);
   const visibleCategories = categoryOrder.length > 0 ? categoryOrder : ['mains'];
-  
+
   useEffect(() => {
     if (activeCategory === 'all' && visibleCategories.length > 0) setActiveCategory(visibleCategories[0]);
     if (activeCategory !== 'all' && !visibleCategories.includes(activeCategory)) setActiveCategory(visibleCategories[0]);
@@ -205,16 +205,16 @@ export default function CustomerMenuClient({
       </div>
     );
   }
-  
+
   if (error) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-            <div className="text-center p-8 bg-white rounded-lg shadow-md">
-                <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                <h1 className="text-xl font-bold text-red-700">Error Loading Page</h1>
-                <p className="text-gray-700 mt-2">{error}</p>
-            </div>
+      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
+        <div className="text-center p-8 bg-white rounded-lg shadow-md">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-red-700">Error Loading Page</h1>
+          <p className="text-gray-700 mt-2">{error}</p>
         </div>
+      </div>
     );
   }
 
@@ -237,7 +237,7 @@ export default function CustomerMenuClient({
   return (
     <div className="min-h-screen bg-[#f4f4f5] font-sans pb-28">
       <div className="mx-auto min-h-screen max-w-2xl bg-white lg:border-x lg:border-gray-100 shadow-sm relative">
-        
+
         {isReadOnly && (
           <div className="bg-slate-900 text-white px-4 py-2.5 text-center text-sm font-bold shadow-sm relative z-50 flex items-center justify-center gap-2">
             <AlertTriangle size={16} className="text-red-400" />
@@ -288,11 +288,10 @@ export default function CustomerMenuClient({
                     key={tag}
                     type="button"
                     onClick={() => setActiveDietaryTag(isActive ? null : tag)}
-                    className={`inline-flex h-8 shrink-0 items-center rounded-md border px-3 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors ${
-                      isActive 
-                        ? 'border-[#6DBE45] bg-[#6DBE45]/10 text-[#6DBE45]' 
+                    className={`inline-flex h-8 shrink-0 items-center rounded-md border px-3 py-1 text-[11px] font-bold uppercase tracking-wider shadow-sm transition-colors ${isActive
+                        ? 'border-[#6DBE45] bg-[#6DBE45]/10 text-[#6DBE45]'
                         : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     {tag}
                   </button>
@@ -300,7 +299,7 @@ export default function CustomerMenuClient({
               })}
             </div>
           </div>
-          
+
           {/* Zomato/Swiggy Sticky Category Nav */}
           <div className="-mx-3 px-3 sm:-mx-5 sm:px-5 border-t border-slate-100">
             <div className="flex items-center overflow-x-auto touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -308,11 +307,10 @@ export default function CustomerMenuClient({
                 <button
                   key={category}
                   onClick={() => scrollToCategory(category)}
-                  className={`shrink-0 px-4 py-3 text-sm transition-all whitespace-nowrap capitalize ${
-                    activeCategory === category 
-                      ? 'text-[#6DBE45] font-bold border-b-2 border-[#6DBE45]' 
+                  className={`shrink-0 px-4 py-3 text-sm transition-all whitespace-nowrap capitalize ${activeCategory === category
+                      ? 'text-[#6DBE45] font-bold border-b-2 border-[#6DBE45]'
                       : 'text-slate-500 font-medium'
-                  }`}
+                    }`}
                 >
                   {category}
                 </button>
@@ -328,22 +326,22 @@ export default function CustomerMenuClient({
             </div>
           ) : filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center mt-32 px-6 text-center animate-in fade-in duration-500">
-               <div className="h-24 w-24 mb-6 rounded-full bg-white flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 text-slate-300">
-                 <UtensilsCrossed size={40} strokeWidth={1.5} />
-               </div>
-               <h3 className="text-[22px] font-bold text-slate-800 mb-3 tracking-tight">Not Serving This Currently</h3>
-               <p className="text-[15px] text-slate-500 max-w-sm mb-8 leading-relaxed">
-                 We couldn't find any dishes matching your exact preference. Try clearing your filters to explore our full curated menu.
-               </p>
-               <button
-                 onClick={() => {
-                   setSearchQuery('');
-                   setActiveDietaryTag(null);
-                 }}
-                 className="px-8 py-3.5 bg-slate-900 text-white text-[13px] font-bold uppercase tracking-wider rounded-xl shadow-[0_8px_20px_rgba(15,23,42,0.2)] hover:bg-slate-800 hover:-translate-y-0.5 transition-all active:scale-[0.98]"
-               >
-                 Clear Filters
-               </button>
+              <div className="h-24 w-24 mb-6 rounded-full bg-white flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 text-slate-300">
+                <UtensilsCrossed size={40} strokeWidth={1.5} />
+              </div>
+              <h3 className="text-[22px] font-bold text-slate-800 mb-3 tracking-tight">Not Serving This Currently</h3>
+              <p className="text-[15px] text-slate-500 max-w-sm mb-8 leading-relaxed">
+                We couldn't find any dishes matching your exact preference. Try clearing your filters to explore our full curated menu.
+              </p>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setActiveDietaryTag(null);
+                }}
+                className="px-8 py-3.5 bg-slate-900 text-white text-[13px] font-bold uppercase tracking-wider rounded-xl shadow-[0_8px_20px_rgba(15,23,42,0.2)] hover:bg-slate-800 hover:-translate-y-0.5 transition-all active:scale-[0.98]"
+              >
+                Clear Filters
+              </button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -353,7 +351,7 @@ export default function CustomerMenuClient({
                     <section key={category} id={`section-${category}`} className="bg-white scroll-mt-36 pb-2">
                       <div className="px-4 py-4 border-b border-slate-100">
                         <h2 className="text-lg font-bold capitalize text-slate-800 flex items-center justify-between">
-                          {category} 
+                          {category}
                           <span className="text-sm font-medium text-slate-400">({groupedMenu[category].length})</span>
                         </h2>
                       </div>
@@ -392,7 +390,7 @@ export default function CustomerMenuClient({
         </div>
       )}
 
-      {!isReadOnly && restaurantDetails && restaurantDetails.id && tableNumber && restaurantSlug && (
+      {restaurantDetails && restaurantDetails.id && tableNumber && restaurantSlug && (
         <Cart
           isOpen={isCartOpen}
           onClose={() => setIsCartOpen(false)}
@@ -402,7 +400,7 @@ export default function CustomerMenuClient({
         />
       )}
 
-      {!isReadOnly && restaurantDetails && restaurantDetails.id && tableNumber && (
+      {restaurantDetails && restaurantDetails.id && tableNumber && (
         <WaiterBell
           restaurantId={restaurantDetails.id}
           tableNumber={tableNumber}
@@ -415,9 +413,9 @@ export default function CustomerMenuClient({
 
       {!isReadOnly && (
         <>
-          <ActiveBillFloatingBar 
-            isHidden={hideAllFloatingUI} 
-            isCartBarVisible={isCartBarVisible} 
+          <ActiveBillFloatingBar
+            isHidden={hideAllFloatingUI}
+            isCartBarVisible={isCartBarVisible}
           />
           <CheckoutSheet />
         </>
@@ -427,6 +425,7 @@ export default function CustomerMenuClient({
         className={`fixed inset-0 z-[1205] bg-black/40 transition-opacity ${isProfileSidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
         onClick={() => setIsProfileSidebarOpen(false)}
       />
+
       <aside
         className={`fixed right-0 top-0 z-[1210] h-full w-full max-w-sm transform border-l border-slate-200/90 bg-[#fafaf8] shadow-2xl transition-transform duration-300 ease-out ${isProfileSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}
         aria-hidden={!isProfileSidebarOpen}

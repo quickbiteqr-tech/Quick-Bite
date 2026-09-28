@@ -13,13 +13,11 @@ export function GlobalRealtimeListener() {
   
   // Audio State & Refs
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const tableMapRef = useRef<Record<string, string>>({});
 
-  // Initialize Audio & Fetch Restaurant ID
+  // Initialize Audio Context & Fetch Restaurant ID
   useEffect(() => {
-    // We instantiate the audio object but don't play it until user interacts
-    audioRef.current = new Audio("/notification.mp3");
-    audioRef.current.preload = "auto";
 
     const fetchRestaurant = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -29,16 +27,57 @@ export function GlobalRealtimeListener() {
         .select("id")
         .eq("user_id", user.id)
         .single();
-      if (data) setRestaurantId(data.id);
+      if (data) {
+        setRestaurantId(data.id);
+        
+        // Fetch tables to resolve table_id -> table_number for order payloads
+        const { data: tablesData } = await supabase
+          .from("tables")
+          .select("id, table_number")
+          .eq("restaurant_id", data.id);
+          
+        if (tablesData) {
+          const map: Record<string, string> = {};
+          tablesData.forEach(t => map[t.id] = String(t.table_number));
+          tableMapRef.current = map;
+        }
+      }
     };
 
     fetchRestaurant();
   }, []);
 
   const playChime = useCallback(() => {
-    if (isAudioEnabled && audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(e => console.log("Audio autoplay blocked:", e));
+    if (!isAudioEnabled) return;
+    
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime); // High pitch (A5)
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); // Drop to (A4)
+      
+      gainNode.gain.setValueAtTime(0, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05); // Fade in
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5); // Fade out
+      
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {
+      console.log("Web Audio API chime failed:", e);
     }
   }, [isAudioEnabled]);
 
@@ -68,7 +107,7 @@ export function GlobalRealtimeListener() {
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         (payload) => {
-          const tableNum = payload.new.table_number || "Unknown";
+          const tableNum = payload.new.table_number || tableMapRef.current[payload.new.table_id] || "Unknown";
           playChime();
           
           // Route Awareness: Don't show toast if already on Queue page

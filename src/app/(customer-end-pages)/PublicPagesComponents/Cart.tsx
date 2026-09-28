@@ -28,7 +28,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modalState, setModalState] = useState<{ type: 'success' | 'error'; title: string; message: string } | null>(null);
-  
+
   // Refs to track component state and prevent memory leaks
   const isMountedRef = useRef(true);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -68,8 +68,8 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
       });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ 
-          error: `Server error: ${res.status} ${res.statusText}` 
+        const errorData = await res.json().catch(() => ({
+          error: `Server error: ${res.status} ${res.statusText}`
         }));
         throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
       }
@@ -131,10 +131,10 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
       if (data?.success && data?.trackCode) {
         setOrderSuccess(true);
         clearCart();
-        
+
         // REGENERATE the idempotency key for future orders in the same session
         idempotencyKeyRef.current = crypto.randomUUID();
-        
+
         // Trigger global checkout store updates
         useCheckoutStore.getState().fetchActiveSession();
         // Small delay to show success state before opening drawer
@@ -146,11 +146,15 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
         throw new Error(data?.error || 'Failed to place postpaid order.');
       }
     } catch (error: unknown) {
-      const errMsg = error instanceof Error 
-        ? error.message 
+      const errMsg = error instanceof Error
+        ? error.message
         : 'An error occurred while placing your order.';
-      
+
       console.error('Pay on table error:', error);
+      
+      // Close the cart drawer automatically on error (like WaiterBell does)
+      onClose();
+      
       safeSetState(() => {
         setErrorMessage(errMsg);
         setModalState({
@@ -165,15 +169,15 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
       safeSetState(() => setIsLoading(null));
     }
   };
-  
+
   const handleClose = () => {
     onClose();
-    
+
     // Clear timeout if it exists
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    
+
     // Reset state after animation completes
     timeoutRef.current = setTimeout(() => {
       if (isMountedRef.current) {
@@ -199,15 +203,15 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
         <div className="flex flex-col h-full">
           <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-100">
             <h2 className="text-xl sm:text-2xl font-bold text-[#2D3436]">Your Cart</h2>
-            <button 
-              onClick={handleClose} 
+            <button
+              onClick={handleClose}
               className="rounded-full p-2 transition-colors hover:bg-gray-100"
               disabled={isLoading === 'table'} // Prevent closing during order placement
             >
               <X size={20} className="sm:w-6 sm:h-6" />
             </button>
           </div>
-          
+
           {orderSuccess ? (
             <div className="flex flex-col items-center justify-center h-full text-center text-gray-700 p-4 sm:p-6">
               <div className="animate-pulse">
@@ -236,7 +240,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
                   </div>
                 )}
               </div>
-              
+
               {items.length > 0 && (
                 <div className="border-t border-gray-100 bg-gray-50 p-4 sm:p-6">
                   <div className="flex justify-between items-center mb-3 sm:mb-4">
@@ -245,7 +249,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
                       {formatPrice(totalPrice())}
                     </span>
                   </div>
-                  
+
                   {errorMessage && (
                     <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg text-xs sm:text-sm">
                       <div className="flex items-center">
@@ -254,7 +258,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="space-y-2 sm:space-y-3">
                     <button
                       onClick={handlePayOnTable}
@@ -285,7 +289,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setModalState(null)}
-              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              className="fixed inset-0 z-[3000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -304,7 +308,7 @@ export default function Cart({ isOpen, onClose, restaurantId, tableNumber, resta
                   <p className="text-sm text-slate-600 leading-relaxed mb-8">
                     {modalState.message}
                   </p>
-                  
+
                   <button
                     onClick={() => setModalState(null)}
                     className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-sm active:scale-[0.98] transition-transform ${modalState.type === 'success' ? 'bg-[#6DBE45] hover:bg-[#5aa337]' : 'bg-slate-900 hover:bg-slate-800'}`}

@@ -107,27 +107,29 @@ ${redirectLink}
               <div className="space-y-4 mb-8">
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Order Breakdown</h3>
                 
-                {activeOrders.map((order, idx) => {
+                {[...activeOrders].sort((a, b) => (a.status === 'cancelled' ? 1 : b.status === 'cancelled' ? -1 : 0)).map((order, idx) => {
                   const currentStatus = order.status?.toLowerCase() || 'pending';
+                  const isCancelled = currentStatus === 'cancelled';
                   const isServed = ['ready', 'served', 'complete'].includes(currentStatus);
                   const isPreparing = currentStatus === 'preparing';
                   
                   return (
-                  <div key={order.id} className="bg-white rounded-2xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 mb-4 overflow-hidden relative">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-[#6DBE45] to-[#4c972b]" />
+                  <div key={order.id} className={`bg-white rounded-2xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-slate-100 mb-4 overflow-hidden relative ${isCancelled ? 'opacity-50 grayscale' : ''}`}>
+                    <div className={`absolute top-0 left-0 w-1.5 h-full ${isCancelled ? 'bg-red-400' : 'bg-gradient-to-b from-[#6DBE45] to-[#4c972b]'}`} />
                     <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-50 pl-2">
                       <div>
                         <div className="text-xs font-bold text-slate-400">ORDER #{order.track_code}</div>
-                        <div className="text-sm font-bold text-slate-800 mt-0.5">
+                        <div className={`text-sm font-bold mt-0.5 ${isCancelled ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
                           Total: ₹{Number(order.total_amount).toFixed(2)}
                         </div>
                       </div>
                       <div className={`text-xs font-bold px-3 py-1.5 rounded-lg capitalize flex items-center gap-1.5 ${
+                        isCancelled ? 'bg-red-50 text-red-600' :
                         isServed ? 'bg-emerald-50 text-emerald-600' :
                         isPreparing ? 'bg-blue-50 text-blue-600' :
                         'bg-amber-50 text-amber-600'
                       }`}>
-                        {isServed ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {isCancelled ? <X className="w-3.5 h-3.5" /> : isServed ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         {currentStatus === 'ready' ? 'served' : currentStatus}
                       </div>
                     </div>
@@ -210,7 +212,7 @@ ${redirectLink}
                 </h3>
                 <div className="space-y-3 mb-4 pb-4 border-b border-slate-100">
                   {Object.values(
-                    activeOrders.flatMap(o => o.order_items).reduce((acc: any, item) => {
+                    activeOrders.filter(o => o.status !== 'cancelled').flatMap(o => o.order_items).reduce((acc: any, item) => {
                       const itemName = Array.isArray(item.menu_items) 
                         ? item.menu_items[0]?.name 
                         : item.menu_items?.name || 'Unknown Item';

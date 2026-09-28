@@ -201,7 +201,7 @@ const ManagerOrderCard = ({ order, onUpdate, now }: { order: QueueOrder, onUpdat
 
         {order.status === 'Serve' && (
           <button 
-            onClick={() => handleUpdate('CLEAR')}
+            onClick={() => handleUpdate('Complete')}
             disabled={updating}
             className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 font-bold rounded-xl shadow-sm transition-all text-sm"
           >

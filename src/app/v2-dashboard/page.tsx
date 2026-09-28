@@ -45,7 +45,7 @@ interface ProcessedTable extends Table {
 
 // --- Components ---
 
-const TableCard = ({ table, onSettle }: { table: ProcessedTable, onSettle: (t: ProcessedTable) => void }) => {
+const TableCard = ({ table, onSettle, onResolve, onBan }: { table: ProcessedTable, onSettle: (t: ProcessedTable) => void, onResolve: (id: string) => void, onBan: (t: ProcessedTable) => void }) => {
   const { table_number, isActive, hasServiceRequest, grandTotal, requests } = table;
 
   let borderColor = "border-slate-200";
@@ -95,26 +95,39 @@ const TableCard = ({ table, onSettle }: { table: ProcessedTable, onSettle: (t: P
                  <span className="font-black text-lg text-slate-900">₹{grandTotal.toFixed(2)}</span>
                </div>
              )}
-            <div className="flex flex-wrap gap-2 mt-1">
+            <div className="flex flex-col gap-2 mt-1">
               {requests.map(r => (
-                <span key={r.id} className="inline-flex items-center gap-1.5 text-[10px] uppercase font-bold bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg shadow-sm border border-amber-200/50">
-                  <BellRing size={12} /> {r.request_type}
-                </span>
+                <div key={r.id} className="flex items-center justify-between bg-amber-100 text-amber-700 px-3 py-2 rounded-xl shadow-sm border border-amber-200/50">
+                  <span className="flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest">
+                    <BellRing size={12} /> {r.request_type}
+                  </span>
+                  <button onClick={() => onResolve(r.id)} className="p-1 hover:bg-amber-200 rounded-md transition-colors text-amber-600">
+                    <CheckCircle2 size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
         )}
       </div>
 
-      {isActive && (
+      <div className="mt-6 flex flex-col gap-2 z-10">
+        {isActive && (
+          <button 
+            onClick={() => onSettle(table)}
+            className="w-full py-4 bg-[#6DBE45] hover:bg-[#5aa337] text-white font-bold rounded-2xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <Receipt size={18} />
+            Settle ₹{grandTotal.toFixed(2)}
+          </button>
+        )}
         <button 
-          onClick={() => onSettle(table)}
-          className="mt-6 w-full py-4 bg-[#6DBE45] hover:bg-[#5aa337] text-white font-bold rounded-2xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 z-10"
+          onClick={() => onBan(table)}
+          className={`w-full py-2 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-bold transition-all ${isActive ? 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-700'}`}
         >
-          <Receipt size={18} />
-          Settle ₹{grandTotal.toFixed(2)}
+          <X size={14} /> Ban & Clear Session
         </button>
-      )}
+      </div>
     </div>
   );
 };
@@ -199,7 +212,38 @@ export default function FOHCommandCenter() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   
   const [selectedTable, setSelectedTable] = useState<ProcessedTable | null>(null);
+  const [banningTable, setBanningTable] = useState<ProcessedTable | null>(null);
   const [settling, setSettling] = useState(false);
+  
+  const handleResolveRequest = async (srId: string) => {
+    try {
+      await supabase.from('service_requests').update({ status: 'resolved' }).eq('id', srId);
+      fetchData();
+    } catch (e) {
+      toast.error('Failed to resolve request');
+    }
+  };
+
+  const handleBanConfirm = async (tableId: string, tableNum: string) => {
+    setSettling(true);
+    try {
+      // Find the restaurant ID (assuming all tables belong to the currently viewed restaurant map)
+      const resId = restaurantIds[0];
+      const res = await fetch('/api/admin/clear-table', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tableNumber: tableNum, restaurantId: resId })
+      });
+      if (!res.ok) throw new Error('Failed to clear table');
+      toast.success('Table cleared & session revoked.');
+      setBanningTable(null);
+      fetchData();
+    } catch (e) {
+      toast.error('Failed to clear table.');
+    } finally {
+      setSettling(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -337,7 +381,7 @@ export default function FOHCommandCenter() {
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
         >
           {tablesGrid.map(table => (
-            <TableCard key={table.id} table={table} onSettle={(t) => setSelectedTable(t)} />
+            <TableCard key={table.id} table={table} onSettle={(t) => setSelectedTable(t)} onResolve={handleResolveRequest} onBan={(t) => setBanningTable(t)} />
           ))}
         </motion.div>
       )}
@@ -350,6 +394,41 @@ export default function FOHCommandCenter() {
             onConfirm={handleSettleConfirm}
             settling={settling} 
           />
+        )}
+
+        {banningTable && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+               <div className="p-6 bg-rose-50 border-b border-rose-100 flex justify-between items-start">
+                 <div>
+                   <h2 className="text-xl font-black text-rose-900 tracking-tight">Ban & Clear T{banningTable.table_number}?</h2>
+                   <p className="text-sm font-medium text-rose-700 mt-1">This will instantly revoke access for all diners.</p>
+                 </div>
+                 <button onClick={() => setBanningTable(null)} className="p-2 bg-white rounded-full text-rose-400 hover:bg-rose-100 transition-colors shadow-sm">
+                   <X size={16}/>
+                 </button>
+               </div>
+               
+               <div className="p-6">
+                 {banningTable.orders.length > 0 ? (
+                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 shadow-sm">
+                     <p className="text-sm font-bold text-amber-800 leading-relaxed">
+                       Warning: There are {banningTable.orders.length} unpaid active orders totaling ₹{banningTable.grandTotal.toFixed(2)}. Banning now will archive these orders permanently.
+                     </p>
+                   </div>
+                 ) : (
+                   <p className="text-sm font-semibold text-slate-600 mb-6">No active unpaid orders found. It is safe to clear this table.</p>
+                 )}
+                 <button
+                   onClick={() => handleBanConfirm(banningTable.id, banningTable.table_number)}
+                   disabled={settling}
+                   className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-2xl shadow-md transition-all flex items-center justify-center disabled:opacity-70"
+                 >
+                   {settling ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirm Ban & Clear'}
+                 </button>
+               </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

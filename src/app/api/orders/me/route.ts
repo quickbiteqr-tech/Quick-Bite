@@ -69,7 +69,7 @@ export async function GET(req: Request) {
         )
       `)
       .eq('table_id', tableData.id)
-      .not('status', 'in', '("completed", "cancelled")')
+      .eq('is_archived', false)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -81,7 +81,9 @@ export async function GET(req: Request) {
       return NextResponse.json({ orders: [], aggregatedTotal: 0, hasActiveOrders: false, tableId: tableData.id }, { status: 200 });
     }
 
-    const aggregatedTotal = activeOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+    const aggregatedTotal = activeOrders
+      .filter((order) => order.status !== 'cancelled')
+      .reduce((sum, order) => sum + (order.total_amount || 0), 0);
 
     return NextResponse.json({
       orders: activeOrders,
