@@ -195,7 +195,7 @@ export default function MenuItemForm({
   return (
     <div className="font-sans">
       <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-6">
-        
+
         {/* Card 1: Core Details & Dietary Tags */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div className="mb-6 flex flex-col items-center">
@@ -262,7 +262,7 @@ export default function MenuItemForm({
                   </button>
                 </div>
               </div>
-              
+
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-800">
                   Available to Order
@@ -293,11 +293,10 @@ export default function MenuItemForm({
                       key={option.id}
                       type="button"
                       onClick={() => toggleDietaryTag(option.id)}
-                      className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                        isActive 
-                          ? 'bg-[#6DBE45] text-white' 
+                      className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${isActive
+                          ? 'bg-[#6DBE45] text-white'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
+                        }`}
                     >
                       {option.label}
                     </button>
@@ -311,21 +310,21 @@ export default function MenuItemForm({
         {/* Card 2: The Pricing Engine */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <h2 className="mb-5 text-lg font-bold text-slate-900">Pricing Engine</h2>
-          
+
           <div className="mb-6 flex gap-4">
             <label className="flex cursor-pointer items-center gap-2">
-              <input 
-                type="radio" 
-                {...register("pricingType")} 
+              <input
+                type="radio"
+                {...register("pricingType")}
                 value="single"
                 className="h-4 w-4 text-[#6DBE45] focus:ring-[#6DBE45]"
               />
               <span className="text-sm font-semibold text-slate-800">Single Price</span>
             </label>
             <label className="flex cursor-pointer items-center gap-2">
-              <input 
-                type="radio" 
-                {...register("pricingType")} 
+              <input
+                type="radio"
+                {...register("pricingType")}
                 value="multiple"
                 className="h-4 w-4 text-[#6DBE45] focus:ring-[#6DBE45]"
               />
@@ -402,8 +401,8 @@ export default function MenuItemForm({
           <div className="space-y-6">
             {groupFields.map((group, groupIndex) => (
               <div key={group.id} className="rounded-xl border border-slate-200 bg-slate-50 p-5">
-                <div className="mb-4 flex items-start justify-between gap-4">
-                  <div className="flex-1">
+                <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="w-full sm:flex-1">
                     <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                       Group Name
                     </label>
@@ -413,39 +412,41 @@ export default function MenuItemForm({
                       className={inputClass}
                     />
                   </div>
-                  <div className="w-24">
-                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                      Min
-                    </label>
-                    <input
-                      {...register(`modifier_groups.${groupIndex}.min_selection` as const)}
-                      type="number"
-                      min="0"
-                      className={inputClass}
-                    />
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <div className="flex-1 sm:w-24">
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Min
+                      </label>
+                      <input
+                        {...register(`modifier_groups.${groupIndex}.min_selection` as const)}
+                        type="number"
+                        min="0"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="flex-1 sm:w-24">
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Max
+                      </label>
+                      <input
+                        {...register(`modifier_groups.${groupIndex}.max_selection` as const)}
+                        type="number"
+                        min="1"
+                        className={inputClass}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeGroup(groupIndex)}
+                      className="mt-6 flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-xl bg-white text-red-500 shadow-sm border border-slate-200 hover:bg-red-50"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
-                  <div className="w-24">
-                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                      Max
-                    </label>
-                    <input
-                      {...register(`modifier_groups.${groupIndex}.max_selection` as const)}
-                      type="number"
-                      min="1"
-                      className={inputClass}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeGroup(groupIndex)}
-                    className="mt-7 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-red-500 shadow-sm hover:bg-red-50"
-                  >
-                    <Trash2 size={18} />
-                  </button>
                 </div>
-                
+
                 <div className="mb-3 flex items-center">
-                  <input 
+                  <input
                     type="checkbox"
                     {...register(`modifier_groups.${groupIndex}.is_required` as const)}
                     className="mr-2 h-4 w-4 rounded border-slate-300 text-[#6DBE45] focus:ring-[#6DBE45]"
@@ -459,7 +460,7 @@ export default function MenuItemForm({
                 </div>
               </div>
             ))}
-            
+
             {groupFields.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-300 py-10 text-center">
                 <p className="text-sm text-slate-500">No customizations added yet.</p>
@@ -500,15 +501,15 @@ function ModifierOptionsList({ control, register, groupIndex }: any) {
     <div className="space-y-3">
       {fields.map((field, index) => (
         <div key={field.id} className="flex items-center gap-2">
-          <GripVertical size={16} className="text-slate-400 cursor-move" />
-          <div className="flex-1">
+          <GripVertical size={16} className="text-slate-400 cursor-move shrink-0" />
+          <div className="flex-1 min-w-0">
             <input
               {...register(`modifier_groups.${groupIndex}.options.${index}.name` as const, { required: true })}
               placeholder="Option Name"
               className={inputClass}
             />
           </div>
-          <div className="w-32">
+          <div className="w-24 sm:w-32 shrink-0">
             <input
               {...register(`modifier_groups.${groupIndex}.options.${index}.price` as const)}
               type="number"
