@@ -30,7 +30,8 @@ export async function GET() {
     .limit(10);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("GET /api/orders/recent error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 
   return NextResponse.json(data);

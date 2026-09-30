@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@/lib/supabase/server';
 
 export async function POST(req: Request) {
   try {
@@ -7,6 +8,33 @@ export async function POST(req: Request) {
 
     if (!tableId) {
       return NextResponse.json({ error: 'Missing tableId' }, { status: 400 });
+    }
+
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { data: table, error: tableError } = await supabase
+      .from('tables')
+      .select('restaurant_id')
+      .eq('id', tableId)
+      .single();
+
+    if (!table || tableError) {
+      return NextResponse.json({ error: 'Table not found' }, { status: 404 });
+    }
+
+    const { data: restaurant, error: fetchError } = await supabase
+      .from('restaurants')
+      .select('user_id')
+      .eq('id', table.restaurant_id)
+      .single();
+
+    if (fetchError || !restaurant || restaurant.user_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const supabaseAdmin = createClient(
@@ -40,13 +68,13 @@ export async function POST(req: Request) {
     }
 
     // 2. Clear the active session from the table
-    const { error: tableError } = await supabaseAdmin
+    const { error: sessionError } = await supabaseAdmin
       .from('tables')
       .update({ current_session_id: null })
       .eq('id', tableId);
 
-    if (tableError) {
-      console.error('Failed to update table session:', tableError);
+    if (sessionError) {
+      console.error('Failed to update table session:', sessionError);
       return NextResponse.json({ error: 'Failed to update table session' }, { status: 500 });
     }
 

@@ -298,7 +298,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("Enhanced orders API error:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = "Internal Server Error";
     return NextResponse.json({ 
       error: "Internal server error: " + errorMessage 
     }, { status: 500 });

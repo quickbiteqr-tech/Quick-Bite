@@ -7,18 +7,18 @@ import { orderRateLimit } from "@/lib/rate-limit";
 
 const cartItemSchema = z.object({
   id: z.string().uuid("Invalid menu item ID"),
-  quantity: z.number().int().positive("Quantity must be greater than 0"),
+  quantity: z.number().int().positive("Quantity must be greater than 0").max(100, "Quantity too high"),
   price: z.number().nonnegative("Price cannot be negative").optional(),
   variantId: z.string().uuid("Invalid variant ID").optional(),
-  variantLabel: z.string().optional(),
+  variantLabel: z.string().max(200).optional(),
   variantPrice: z.number().nonnegative("Variant price cannot be negative").optional(),
   selectedModifiers: z.array(
     z.object({
       id: z.string(),
-      name: z.string(),
-      price: z.number(),
+      name: z.string().max(200),
+      price: z.number().nonnegative(),
     })
-  ).optional(),
+  ).max(50).optional(),
   unitPrice: z.number().nonnegative("Unit price cannot be negative").optional(),
 });
 
@@ -84,6 +84,24 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+    // Primary Enforcement: Server-side IP Ban Check
+    const { data: bannedIp } = await supabaseAdmin
+      .from('banned_ips')
+      .select('ip_address')
+      .eq('ip_address', ip)
+      .eq('restaurant_id', restaurantId)
+      .maybeSingle();
+
+    if (bannedIp) {
+        await supabaseAdmin
+          .from('tables')
+          .update({ current_session_id: null })
+          .eq('restaurant_id', restaurantId)
+          .eq('table_number', String(tableNumber));
+
+        return NextResponse.json({ error: 'Your access has been restricted by the restaurant. Please speak with a manager to restore your access.' }, { status: 403 });
+    }
 
     if (deviceId) {
       const { data: bannedDevice } = await supabaseAdmin
@@ -169,13 +187,31 @@ export async function POST(req: Request) {
 
     const priceMap = new Map(menuItems.map((item) => [item.id, item.price]));
 
+    // Securely fetch variant and modifier prices from DB
+    const variantIds = cartItems.map(i => i.variantId).filter(Boolean) as string[];
+    const { data: variants } = variantIds.length > 0 
+      ? await supabase.from('menu_item_variants').select('id, price').in('id', variantIds) 
+      : { data: [] };
+    const variantMap = new Map(variants?.map(v => [v.id, v.price]) || []);
+
+    const modifierIds = cartItems.flatMap(i => i.selectedModifiers?.map(m => m.id) || []);
+    const { data: modifiers } = modifierIds.length > 0 
+      ? await supabase.from('menu_item_modifiers').select('id, price').in('id', modifierIds) 
+      : { data: [] };
+    const modifierMap = new Map(modifiers?.map(m => [m.id, m.price]) || []);
+
     // 4. Securely recalculate the total amount
     let serverCalculatedTotal = 0;
     const secureOrderItems = cartItems.map((item) => {
-      const hasRelationalData = item.variantId || (item.selectedModifiers && item.selectedModifiers.length > 0);
-      const finalUnitPrice = hasRelationalData && item.unitPrice !== undefined
-        ? item.unitPrice
-        : priceMap.get(item.id)!;
+      const basePrice = priceMap.get(item.id) || 0;
+      const variantPrice = item.variantId ? (variantMap.get(item.variantId) || 0) : 0;
+      
+      const modifierTotal = (item.selectedModifiers || []).reduce((sum, mod) => {
+        return sum + (modifierMap.get(mod.id) || 0);
+      }, 0);
+      
+      // Server acts as the ultimate source of truth
+      const finalUnitPrice = basePrice + variantPrice + modifierTotal;
         
       serverCalculatedTotal += finalUnitPrice * item.quantity;
       

@@ -430,7 +430,7 @@ export async function DELETE(
     console.error("Error stack:", err instanceof Error ? err.stack : 'No stack trace');
     console.error("Error details:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
     
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = "Internal Server Error";
     console.error("Error message:", errorMessage);
     
     // Check if it's a foreign key constraint error in the catch block too

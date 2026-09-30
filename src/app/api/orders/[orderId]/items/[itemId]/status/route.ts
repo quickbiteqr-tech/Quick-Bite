@@ -142,8 +142,7 @@ export async function PUT(
 
   } catch (err: unknown) {
     console.error("Order item status update error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Internal server error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 

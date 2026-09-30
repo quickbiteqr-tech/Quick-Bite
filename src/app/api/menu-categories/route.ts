@@ -30,7 +30,8 @@ export async function GET() {
       .order("name", { ascending: true });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      console.error("GET /api/menu-categories error:", error);
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 400 });
     }
 
     return NextResponse.json(data ?? []);
@@ -76,7 +77,10 @@ export async function POST(req: Request) {
       .select("id, restaurant_id, name, created_at")
       .single<MenuCategoryRow>();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error) {
+      console.error("POST /api/menu-categories error:", error);
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 400 });
+    }
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error("POST menu-categories error:", error);

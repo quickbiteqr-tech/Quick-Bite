@@ -67,7 +67,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("PUT /api/tables/[id] error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 
   return NextResponse.json(data);
@@ -86,7 +87,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   const { error } = await supabase.from("tables").delete().eq("id", id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("DELETE /api/tables/[id] error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

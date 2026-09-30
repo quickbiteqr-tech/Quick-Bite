@@ -56,8 +56,7 @@ export async function GET(req: Request) {
 
     // --- LAZY REDIS CACHING (ON-DEMAND) ---
     const cacheKey = `analytics:${restaurantId}:${timeframe}`;
-    // const cachedData = await redis.get(cacheKey);`
-    const cachedData = null;
+    const cachedData = await redis.get(cacheKey);
 
     if (cachedData) {
       return NextResponse.json(typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData);

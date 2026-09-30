@@ -60,9 +60,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, tableNumber, tableId: newTable?.id });
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    console.error("Backend Error in /api/create-table:", err);
     return NextResponse.json(
-      { error: errorMessage },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }

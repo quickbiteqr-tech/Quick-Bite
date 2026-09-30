@@ -61,7 +61,6 @@ export async function POST(req: Request) {
 
   } catch (err: unknown) {
     console.error("Backend Error in /api/update-table:", err);
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

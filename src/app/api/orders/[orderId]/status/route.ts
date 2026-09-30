@@ -146,7 +146,6 @@ export async function PUT(
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     console.error("Order status route error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Internal server error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

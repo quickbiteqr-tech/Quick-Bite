@@ -17,6 +17,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { data: restaurant, error: fetchError } = await supabase
+      .from('restaurants')
+      .select('user_id')
+      .eq('id', restaurantId)
+      .single();
+
+    if (fetchError || !restaurant || restaurant.user_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { data, error } = await supabase
       .from('banned_ips')
       .select('*')
@@ -49,6 +59,16 @@ export async function DELETE(req: Request) {
 
     if (!ip_address || !restaurantId) {
       return NextResponse.json({ error: 'Missing IP or restaurantId' }, { status: 400 });
+    }
+
+    const { data: restaurant, error: fetchError } = await supabase
+      .from('restaurants')
+      .select('user_id')
+      .eq('id', restaurantId)
+      .single();
+
+    if (fetchError || !restaurant || restaurant.user_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { error } = await supabase

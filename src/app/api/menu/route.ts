@@ -104,8 +104,8 @@ export async function POST(req: Request) {
     }
   } catch (err: any) {
     // Rollback the menu item if anything failed
-    await supabase.from("menu_items").delete().eq("id", menuItem.id);
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    console.error("POST /api/menu error:", err);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 400 });
   }
 
   // Fetch the complete inserted item

@@ -28,11 +28,12 @@ export async function POST(req: Request) {
       }, { onConflict: 'endpoint' });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("POST /api/push/subscribe error:", error);
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
-    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    console.error("POST /api/push/subscribe exception:", e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

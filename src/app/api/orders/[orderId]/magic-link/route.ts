@@ -70,7 +70,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ orderId
 
   } catch (err: unknown) {
     console.error("MagicLink POST error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Internal error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

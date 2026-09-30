@@ -57,7 +57,10 @@ export async function POST(req: Request) {
       .select('*')
       .eq('order_id', orderId);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("POST /api/push/notify error:", error);
+      return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
     if (!subs || subs.length === 0) {
         return NextResponse.json({ ok: true, message: "No subscriptions found for this order." });
     }
@@ -86,7 +89,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, results });
   } catch (e: unknown) {
-    const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    console.error("POST /api/push/notify exception:", e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
