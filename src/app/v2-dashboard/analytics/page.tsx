@@ -6,83 +6,29 @@ import {
 } from 'recharts';
 import { TrendingUp, TrendingDown, X, Clock, Receipt, Utensils, Timer, Percent, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import useSWR from 'swr';
 
 type Timeframe = 'today' | 'week' | 'month';
 type MetricType = 'revenue' | 'orders' | 'turns';
 
-// --- ROBUST MOCK DATA ARCHITECTURE ---
-const MOCK_DATA = {
-  today: {
-    label: "Today vs Yesterday",
-    totals: { revenue: 42500, prevRevenue: 37900, orders: 142, prevOrders: 120, turns: 65, prevTurns: 55 },
-    aov: 850,
-    pacing: [
-      { time: '10 AM', current_revenue: 1200, previous_revenue: 900, current_orders: 5, previous_orders: 4, current_turns: 2, previous_turns: 1 },
-      { time: '12 PM', current_revenue: 4500, previous_revenue: 3200, current_orders: 15, previous_orders: 10, current_turns: 5, previous_turns: 4 },
-      { time: '2 PM', current_revenue: 12500, previous_revenue: 11000, current_orders: 45, previous_orders: 40, current_turns: 12, previous_turns: 10 },
-      { time: '4 PM', current_revenue: 18000, previous_revenue: 15500, current_orders: 65, previous_orders: 55, current_turns: 18, previous_turns: 15 },
-      { time: '6 PM', current_revenue: 28000, previous_revenue: 26000, current_orders: 95, previous_orders: 85, current_turns: 25, previous_turns: 22 },
-      { time: '8 PM', current_revenue: 42500, previous_revenue: 37900, current_orders: 142, previous_orders: 120, current_turns: 38, previous_turns: 30 },
-    ],
-    sparklineAov: [{v:800},{v:820},{v:790},{v:850},{v:830},{v:850}],
-    sparklineOrders: [{v:5},{v:12},{v:8},{v:22},{v:35},{v:50}],
-    dishes: [
-      { id: 1, name: 'Truffle Burger', category: 'Mains', price: 300, revenue: 14400, qty: 48, prepDelay: '8m', revContrib: 34, sparkline: [{v:2},{v:5},{v:12},{v:8},{v:15},{v:6}], image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=300&q=80', comparative: [{time: '12 PM', cur: 10, prev: 5}, {time: '4 PM', cur: 15, prev: 12}, {time: '8 PM', cur: 23, prev: 18}] },
-      { id: 2, name: 'Spicy Rigatoni', category: 'Pasta', price: 450, revenue: 16200, qty: 36, prepDelay: '12m', revContrib: 38, sparkline: [{v:0},{v:2},{v:4},{v:10},{v:12},{v:8}], image: 'https://images.unsplash.com/photo-1645696301019-35adcc18fc21?auto=format&fit=crop&w=300&q=80', comparative: [{time: '12 PM', cur: 6, prev: 8}, {time: '4 PM', cur: 12, prev: 10}, {time: '8 PM', cur: 18, prev: 15}] },
-      { id: 3, name: 'Classic Margherita', category: 'Pizza', price: 350, revenue: 10850, qty: 31, prepDelay: '15m', revContrib: 25, sparkline: [{v:5},{v:4},{v:8},{v:6},{v:4},{v:4}], image: 'https://images.unsplash.com/photo-1604068549290-dea0e4a30536?auto=format&fit=crop&w=300&q=80', comparative: [{time: '12 PM', cur: 12, prev: 10}, {time: '4 PM', cur: 10, prev: 8}, {time: '8 PM', cur: 9, prev: 12}] },
-    ]
-  },
-  week: {
-    label: "This Week vs Last Week",
-    totals: { revenue: 285400, prevRevenue: 250000, orders: 980, prevOrders: 820, turns: 420, prevTurns: 380 },
-    aov: 920,
-    pacing: [
-      { time: 'Mon', current_revenue: 35000, previous_revenue: 32000, current_orders: 120, previous_orders: 110, current_turns: 50, previous_turns: 48 },
-      { time: 'Tue', current_revenue: 42000, previous_revenue: 38000, current_orders: 145, previous_orders: 130, current_turns: 60, previous_turns: 55 },
-      { time: 'Wed', current_revenue: 38000, previous_revenue: 35000, current_orders: 130, previous_orders: 120, current_turns: 55, previous_turns: 50 },
-      { time: 'Thu', current_revenue: 45000, previous_revenue: 41000, current_orders: 155, previous_orders: 140, current_turns: 65, previous_turns: 60 },
-      { time: 'Fri', current_revenue: 65000, previous_revenue: 55000, current_orders: 220, previous_orders: 190, current_turns: 90, previous_turns: 80 },
-      { time: 'Sat', current_revenue: 85000, previous_revenue: 72000, current_orders: 280, previous_orders: 240, current_turns: 120, previous_turns: 100 },
-      { time: 'Sun', current_revenue: 25000, previous_revenue: 42000, current_orders: 85, previous_orders: 140, current_turns: 35, previous_turns: 60 },
-    ],
-    sparklineAov: [{v:850},{v:860},{v:840},{v:900},{v:950},{v:1020},{v:920}],
-    sparklineOrders: [{v:120},{v:145},{v:130},{v:155},{v:220},{v:280},{v:85}],
-    dishes: [
-      { id: 1, name: 'Truffle Burger', category: 'Mains', price: 300, revenue: 84400, qty: 281, prepDelay: '7m', revContrib: 29, sparkline: [{v:30},{v:35},{v:40},{v:42},{v:60},{v:74}], image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=300&q=80', comparative: [{time: 'Tue', cur: 30, prev: 25}, {time: 'Thu', cur: 45, prev: 40}, {time: 'Sat', cur: 80, prev: 65}] },
-      { id: 2, name: 'Spicy Rigatoni', category: 'Pasta', price: 450, revenue: 95200, qty: 211, prepDelay: '11m', revContrib: 33, sparkline: [{v:20},{v:22},{v:28},{v:35},{v:50},{v:56}], image: 'https://images.unsplash.com/photo-1645696301019-35adcc18fc21?auto=format&fit=crop&w=300&q=80', comparative: [{time: 'Tue', cur: 25, prev: 20}, {time: 'Thu', cur: 38, prev: 35}, {time: 'Sat', cur: 60, prev: 50}] },
-    ]
-  },
-  month: {
-    label: "This Month vs Last Month",
-    totals: { revenue: 1250000, prevRevenue: 1100000, orders: 4200, prevOrders: 3800, turns: 1850, prevTurns: 1600 },
-    aov: 890,
-    pacing: [
-      { time: 'Week 1', current_revenue: 300000, previous_revenue: 280000, current_orders: 1000, previous_orders: 950, current_turns: 450, previous_turns: 420 },
-      { time: 'Week 2', current_revenue: 320000, previous_revenue: 290000, current_orders: 1100, previous_orders: 1000, current_turns: 480, previous_turns: 440 },
-      { time: 'Week 3', current_revenue: 350000, previous_revenue: 310000, current_orders: 1200, previous_orders: 1050, current_turns: 520, previous_turns: 460 },
-      { time: 'Week 4', current_revenue: 280000, previous_revenue: 220000, current_orders: 900, previous_orders: 800, current_turns: 400, previous_turns: 280 },
-    ],
-    sparklineAov: [{v:850},{v:880},{v:910},{v:890}],
-    sparklineOrders: [{v:1000},{v:1100},{v:1200},{v:900}],
-    dishes: [
-      { id: 1, name: 'Truffle Burger', category: 'Mains', price: 300, revenue: 384400, qty: 1281, prepDelay: '8m', revContrib: 30, sparkline: [{v:280},{v:310},{v:340},{v:351}], image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=300&q=80', comparative: [{time: 'W1', cur: 280, prev: 250}, {time: 'W3', cur: 360, prev: 310}] },
-      { id: 2, name: 'Spicy Rigatoni', category: 'Pasta', price: 450, revenue: 415200, qty: 922, prepDelay: '12m', revContrib: 33, sparkline: [{v:180},{v:220},{v:260},{v:262}], image: 'https://images.unsplash.com/photo-1645696301019-35adcc18fc21?auto=format&fit=crop&w=300&q=80', comparative: [{time: 'W1', cur: 180, prev: 160}, {time: 'W3', cur: 280, prev: 240}] },
-    ]
-  }
+const getTimeAgo = (dateStr: string) => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins} mins ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs} hr${hrs > 1 ? 's' : ''} ago`;
 };
 
-const HEATMAP_DATA = [
-  { id: 'T1', turnover: '45m', aov: 1200, revenue: 3200, turns: 4, status: 'high' },
-  { id: 'T2', turnover: '42m', aov: 1550, revenue: 3100, turns: 2, status: 'high' },
-  { id: 'T3', turnover: '65m', aov: 600, revenue: 1200, turns: 2, status: 'low' },
-  { id: 'T4', turnover: '38m', aov: 1025, revenue: 4100, turns: 4, status: 'optimal' },
-  { id: 'T5', turnover: '40m', aov: 1266, revenue: 3800, turns: 3, status: 'optimal' },
-  { id: 'T6', turnover: '55m', aov: 700, revenue: 2100, turns: 3, status: 'medium' },
-  { id: 'T7', turnover: '62m', aov: 700, revenue: 1400, turns: 2, status: 'low' },
-  { id: 'T8', turnover: '35m', aov: 1500, revenue: 4500, turns: 3, status: 'optimal' },
-  { id: 'T9', turnover: '48m', aov: 933, revenue: 2800, turns: 3, status: 'high' },
-  { id: 'T10', turnover: '50m', aov: 866, revenue: 2600, turns: 3, status: 'medium' },
-];
+export interface AnalyticsPayload {
+  label: string;
+  totals: { revenue: number, prevRevenue: number, orders: number, prevOrders: number, turns: number, prevTurns: number };
+  aov: number;
+  pacing: { time: string, current_revenue: number, previous_revenue: number, current_orders: number, previous_orders: number }[];
+  dishes: { id: string, name: string, category: string, price: number, qty: number, revenue: number, sparkline: {v: number}[], image?: string, prepDelay?: string, revContrib?: number, comparative?: any[] }[];
+  heatmap: { id: string, turns: number, revenue: number, turnover: string, status: 'high' | 'optimal' | 'medium' | 'low' }[];
+}
+
+
 
 const getHeatmapColor = (status: string) => {
   switch (status) {
@@ -94,16 +40,90 @@ const getHeatmapColor = (status: string) => {
   }
 };
 
-const TinySparkline = ({ data, color }: { data: any[], color: string }) => (
-  <div className="w-16 h-8">
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data}>
-        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
-      </LineChart>
-    </ResponsiveContainer>
+const TinySparkline = ({ data, color }: { data: any[], color: string }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex items-center justify-center w-16 h-8 bg-slate-50 rounded-md border border-slate-100">
+        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 text-center leading-tight">No Data</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-16 h-8">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <Line type="monotone" dataKey="v" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+const DashboardSkeleton = () => (
+  <div className="w-full min-h-screen bg-slate-50 font-sans flex flex-col pb-24 lg:pb-12 overflow-x-hidden animate-pulse">
+    <div className="mb-8 shrink-0 px-4 md:px-6 lg:px-8 pt-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+      <div>
+        <div className="h-10 w-48 bg-slate-200 rounded-lg mb-2"></div>
+        <div className="h-4 w-32 bg-slate-200 rounded-md"></div>
+      </div>
+      <div className="h-10 w-64 bg-slate-200 rounded-xl"></div>
+    </div>
+    
+    <div className="px-4 md:px-6 lg:px-8 flex flex-col gap-6">
+      {/* Master Pacing Chart Skeleton */}
+      <div className="bg-white rounded-[2rem] border border-slate-100 p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+        <div className="mb-8 flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
+          <div>
+             <div className="h-6 w-32 bg-slate-200 rounded-md mb-4"></div>
+             <div className="h-12 w-48 bg-slate-200 rounded-lg"></div>
+          </div>
+          <div className="flex flex-col gap-2">
+             <div className="h-4 w-24 bg-slate-200 rounded-md"></div>
+             <div className="h-4 w-24 bg-slate-200 rounded-md"></div>
+          </div>
+        </div>
+        <div className="w-full h-[320px] bg-slate-100 rounded-xl"></div>
+      </div>
+
+      {/* Row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm flex-1">
+          <div className="mb-6"><div className="h-6 w-48 bg-slate-200 rounded-md"></div></div>
+          <div className="flex flex-col gap-4">
+             {[1, 2, 3].map(i => (
+               <div key={i} className="flex items-center gap-4 p-3 rounded-2xl">
+                 <div className="w-12 h-12 rounded-xl bg-slate-200 shrink-0"></div>
+                 <div className="flex-1 space-y-2">
+                   <div className="h-4 w-32 bg-slate-200 rounded-md"></div>
+                   <div className="h-3 w-16 bg-slate-200 rounded-md"></div>
+                 </div>
+                 <div className="space-y-2 text-right">
+                   <div className="h-4 w-16 bg-slate-200 rounded-md"></div>
+                   <div className="h-3 w-12 bg-slate-200 rounded-md ml-auto"></div>
+                 </div>
+               </div>
+             ))}
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-3xl border border-slate-100 p-6 md:p-8 shadow-sm flex flex-col">
+          <div className="mb-6"><div className="h-6 w-48 bg-slate-200 rounded-md"></div></div>
+          <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 sm:gap-4 flex-1 content-start">
+             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
+               <div key={i} className="aspect-square rounded-2xl bg-slate-200"></div>
+             ))}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 );
 
+const fetcher = (url: string) => fetch(url).then(res => {
+  if (!res.ok) throw new Error('API Error');
+  return res.json();
+});
 
 export default function AnalyticsPage() {
   const [timeframe, setTimeframe] = useState<Timeframe>('today');
@@ -112,7 +132,7 @@ export default function AnalyticsPage() {
   const [selectedTable, setSelectedTable] = useState<any | null>(null);
   const [selectedDish, setSelectedDish] = useState<any | null>(null);
 
-  const data = MOCK_DATA[timeframe];
+  const { data, error, isLoading } = useSWR<AnalyticsPayload>(`/api/admin/analytics?timeframe=${timeframe}`, fetcher);
 
   // Dynamic Metric Configuration
   const metricConfig = useMemo(() => {
@@ -123,6 +143,9 @@ export default function AnalyticsPage() {
       default: return { key: 'revenue', name: 'Revenue', prefix: '₹', suffix: '', formatter: (v: number) => `${(v/1000).toFixed(1)}k` };
     }
   }, [activeMetric]);
+
+  if (isLoading || !data) return <DashboardSkeleton />;
+  if (error) return <div className="p-8 text-red-500 font-bold">Failed to load analytics data.</div>;
 
   const currentTotal = data.totals[metricConfig.key as keyof typeof data.totals] as number;
   const prevTotal = data.totals[`prev${metricConfig.key.charAt(0).toUpperCase() + metricConfig.key.slice(1)}` as keyof typeof data.totals] as number;
@@ -237,13 +260,19 @@ export default function AnalyticsPage() {
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mt-1">Tap a dish for Drill-Down</p>
                  </div>
                  <div className="flex flex-col gap-4">
-                    {data.dishes.map(dish => (
+                    {data.dishes.map((dish: any) => (
                       <button 
                         key={dish.id} 
                         onClick={() => setSelectedDish(dish)}
                         className="flex items-center gap-4 p-3 -mx-3 rounded-2xl hover:bg-slate-50 transition-colors text-left"
                       >
-                         <img src={dish.image} alt={dish.name} className="w-12 h-12 rounded-xl object-cover shadow-sm shrink-0" />
+                         <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden shadow-sm">
+                           {dish.image ? (
+                             <img src={dish.image} alt={dish.name} className="w-full h-full object-cover" />
+                           ) : (
+                             <Utensils size={20} className="text-slate-300" />
+                           )}
+                         </div>
                          <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-slate-900 truncate">{dish.name}</h4>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{dish.category}</p>
@@ -269,7 +298,7 @@ export default function AnalyticsPage() {
                </div>
                
                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 sm:gap-4 flex-1 content-start">
-                  {HEATMAP_DATA.map((table) => (
+                  {data.heatmap?.map((table: any) => (
                      <button 
                        key={table.id} 
                        onClick={() => setSelectedTable(table)}
@@ -301,7 +330,13 @@ export default function AnalyticsPage() {
                className="fixed inset-y-0 right-0 w-full md:w-[450px] bg-white z-[101] shadow-2xl flex flex-col border-l border-slate-100 overflow-hidden"
              >
                 <div className="relative h-48 shrink-0">
-                   <img src={selectedDish.image} alt={selectedDish.name} className="w-full h-full object-cover" />
+                   {selectedDish.image ? (
+                     <img src={selectedDish.image} alt={selectedDish.name} className="w-full h-full object-cover" />
+                   ) : (
+                     <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                       <Utensils size={40} className="text-white/20" />
+                     </div>
+                   )}
                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent" />
                    <button onClick={() => setSelectedDish(null)} className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md hover:bg-white/40 transition-colors">
                      <X className="w-5 h-5" />
@@ -403,15 +438,32 @@ export default function AnalyticsPage() {
                    <div>
                       <h3 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-widest">Recent Orders (Last 24h)</h3>
                       <div className="space-y-3">
-                         {Array.from({ length: selectedTable.turns }).map((_, i) => (
-                           <div key={i} className="flex justify-between items-center p-4 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
-                              <div>
-                                <p className="font-bold text-slate-800">Order #{8493 - i}</p>
-                                <p className="text-xs font-semibold text-slate-400 mt-1">{i * 15 + 10} mins ago • {4 - i} items</p>
+                         {selectedTable.recent_orders?.length > 0 ? selectedTable.recent_orders.map((o: any) => (
+                           <div key={o.id} className="flex flex-col gap-3 p-4 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-bold text-slate-800 uppercase">Order #{o.id}</p>
+                                  <p className="text-xs font-semibold text-slate-400 mt-1">{getTimeAgo(o.time)} • {o.items_count} items</p>
+                                </div>
+                                <p className="font-black text-slate-900">₹{o.amount.toLocaleString()}</p>
                               </div>
-                              <p className="font-black text-slate-900">₹{(selectedTable.aov * (1 + (i*0.1))).toFixed(0)}</p>
+                              {/* Order Items List */}
+                              {o.items_list && o.items_list.length > 0 && (
+                                <div className="pt-3 border-t border-slate-100/60 flex flex-col gap-1.5">
+                                  {o.items_list.map((item: any, idx: number) => (
+                                    <div key={idx} className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                                      <span className="w-5 h-5 flex items-center justify-center bg-slate-200/50 rounded-md text-[10px] text-slate-700">{item.qty}x</span>
+                                      <span className="truncate">{item.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                            </div>
-                         ))}
+                         )) : (
+                           <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No recent orders</p>
+                           </div>
+                         )}
                       </div>
                    </div>
                 </div>
