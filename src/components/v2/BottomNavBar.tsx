@@ -27,16 +27,16 @@ export function BottomNavBar() {
   };
 
   const primaryLinks = [
-    { name: "Floor", href: "/v2-dashboard", icon: <Receipt /> },
-    { name: "Queue", href: "/v2-dashboard/queue", icon: "/order-food.png" },
-    { name: "Menu", href: "/v2-dashboard/menu", icon: "/fork.png" },
+    { name: "Floor", href: "/dashboard", icon: <Receipt /> },
+    { name: "Queue", href: "/dashboard/queue", icon: "/order-food.png" },
+    { name: "Menu", href: "/dashboard/menu", icon: "/fork.png" },
   ];
 
   const secondaryLinks = [
-    { name: "Analytics", href: "/v2-dashboard/analytics", icon: "/monitor.png" },
-    { name: "Tables", href: "/v2-dashboard/tables", icon: "/dinner-table.png" },
-    { name: "Profile", href: "/v2-dashboard/profile", icon: <UserCircle2 /> },
-    { name: "Security", href: "/v2-dashboard/security", icon: <Shield /> },
+    { name: "Analytics", href: "/dashboard/analytics", icon: "/monitor.png" },
+    { name: "Tables", href: "/dashboard/tables", icon: "/dinner-table.png" },
+    { name: "Profile", href: "/dashboard/profile", icon: <UserCircle2 /> },
+    { name: "Security", href: "/dashboard/security", icon: <Shield /> },
   ];
 
   return (
@@ -44,7 +44,7 @@ export function BottomNavBar() {
       <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 z-50 pb-[env(safe-area-inset-bottom)] lg:hidden">
         <div className="flex items-center justify-around h-16 px-2">
           {primaryLinks.map((link) => {
-            const isActive = link.href === "/v2-dashboard"
+            const isActive = link.href === "/dashboard"
               ? pathname === link.href
               : pathname === link.href || pathname.startsWith(`${link.href}/`);
             return (
@@ -140,7 +140,7 @@ export function BottomNavBar() {
 
                 <div className="grid grid-cols-4 gap-4 mb-6">
                   {secondaryLinks.map((link) => {
-                    const isActive = link.href === "/v2-dashboard"
+                    const isActive = link.href === "/dashboard"
                       ? pathname === link.href
                       : pathname === link.href || pathname.startsWith(`${link.href}/`);
                     return (

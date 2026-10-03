@@ -111,7 +111,7 @@ export function GlobalRealtimeListener() {
           playChime();
           
           // Route Awareness: Don't show toast if already on Queue page
-          if (pathname !== "/v2-dashboard/queue") {
+          if (pathname !== "/dashboard/queue") {
             toast.custom((t) => (
               <div className="flex w-full items-center gap-4 rounded-xl border-l-4 border-l-[#6DBE45] bg-white p-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6DBE45]/10 text-[#6DBE45]">
@@ -124,7 +124,7 @@ export function GlobalRealtimeListener() {
                 <button
                   onClick={() => {
                     toast.dismiss(t);
-                    router.push("/v2-dashboard/queue");
+                    router.push("/dashboard/queue");
                   }}
                   className="rounded-lg bg-[#6DBE45] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#5aa337] transition-colors"
                 >

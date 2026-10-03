@@ -25,20 +25,20 @@ export function SlimSidebar() {
   };
 
   const primaryLinks = [
-    { name: "Floor", href: "/v2-dashboard", icon: <Receipt /> },
-    { name: "Queue", href: "/v2-dashboard/queue", icon: "/order-food.png" },
-    { name: "Menu", href: "/v2-dashboard/menu", icon: "/fork.png" },
+    { name: "Floor", href: "/dashboard", icon: <Receipt /> },
+    { name: "Queue", href: "/dashboard/queue", icon: "/order-food.png" },
+    { name: "Menu", href: "/dashboard/menu", icon: "/fork.png" },
   ];
 
   const secondaryLinks = [
-    { name: "Analytics", href: "/v2-dashboard/analytics", icon: "/monitor.png" },
-    { name: "Tables", href: "/v2-dashboard/tables", icon: "/dinner-table.png" },
-    { name: "Profile", href: "/v2-dashboard/profile", icon: <UserCircle2 /> },
-    { name: "Security", href: "/v2-dashboard/security", icon: <Shield /> },
+    { name: "Analytics", href: "/dashboard/analytics", icon: "/monitor.png" },
+    { name: "Tables", href: "/dashboard/tables", icon: "/dinner-table.png" },
+    { name: "Profile", href: "/dashboard/profile", icon: <UserCircle2 /> },
+    { name: "Security", href: "/dashboard/security", icon: <Shield /> },
   ];
 
   const NavItem = ({ href, icon, label }: { href: string; icon: any; label: string }) => {
-    const isActive = href === "/v2-dashboard"
+    const isActive = href === "/dashboard"
       ? pathname === href
       : pathname === href || pathname.startsWith(`${href}/`);
 
@@ -94,7 +94,7 @@ export function SlimSidebar() {
           />
         </div>
         <span className="whitespace-nowrap font-bold text-lg text-slate-800 overflow-hidden transition-all duration-300 max-w-0 opacity-0 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100 group-hover/sidebar:ml-1">
-          QuickBite
+          QuickBite<span className="text-[#6DBE45]">QR</span>
         </span>
       </div>
 

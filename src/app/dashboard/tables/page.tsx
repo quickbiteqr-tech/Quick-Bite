@@ -1,34 +1,51 @@
-'use client';
+"use client";
 
-import { useState, useMemo } from 'react';
-import Link from 'next/link';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useTables } from '@/lib/hooks/useTables';
 import QRCodeGenerator from '@/components/tables/QRCodeGenerator';
-import { Plus, Trash2, Edit, Loader2, Download, Eye, Lock, Unlock } from 'lucide-react';
+import { Plus, Printer, Download, Trash2, Edit, Loader2, Eye, Lock, Unlock, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 import QRModal from '@/components/QRModal';
+import { supabase } from '@/lib/supabase/client';
+import { generateQR } from '@/lib/api/generateQR';
 
 type TableItem = {
   id: string;
   table_number: string;
   qr_code_url?: string | null;
   is_locked?: boolean;
+  restaurant_id?: string;
   [key: string]: any; 
 };
 
-export default function TablesPage() {
+export default function TablesV2Page() {
   const { tables, loading, error, deleteTable, refetch } = useTables();
   const [searchQuery, setSearchQuery] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
+  
+  const [restaurant, setRestaurant] = useState<any>(null);
   const [selectedTableForModal, setSelectedTableForModal] = useState<TableItem | null>(null);
+  
+  // Modal states for routing-free flow
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingTable, setEditingTable] = useState<TableItem | null>(null);
+  
+  const [formInput, setFormInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const filteredTables = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return tables;
-    return tables.filter((t) => t.table_number.toLowerCase().includes(q));
-  }, [tables, searchQuery]);
+  // Fetch restaurant context for Add/Edit logic
+  useEffect(() => {
+    const fetchRestaurant = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('restaurants').select('*').eq('user_id', user.id).single();
+      if (data) setRestaurant(data);
+    };
+    fetchRestaurant();
+  }, []);
 
+  // --- ACTIONS ---
   const handleToggleLock = async (tableId: string, currentLockState: boolean) => {
     setActionLoading(`lock-${tableId}`);
     const newLockState = !currentLockState;
@@ -40,7 +57,7 @@ export default function TablesPage() {
       });
       if (res.ok) {
         toast.success(`Table ${newLockState ? 'locked' : 'unlocked'}`);
-        refetch(); // from useTables
+        refetch();
       } else {
         toast.error('Failed to update table status');
       }
@@ -62,6 +79,7 @@ export default function TablesPage() {
         document.body.appendChild(downloadLink);
         downloadLink.click();
         document.body.removeChild(downloadLink);
+        toast.success(`Downloaded QR for ${tableNumber}`);
       } else {
         toast.error("QR Code not found.");
       }
@@ -71,218 +89,327 @@ export default function TablesPage() {
     }
   };
 
-  return (
-    <div className="min-h-[calc(100vh-2rem)] font-sans text-slate-800 selection:bg-[#6DBE45] selection:text-white">
-      <div className="mx-auto max-w-7xl">
-        {/* Hero */}
-        <div className="relative mb-4 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.04)]">
-          <div
-            className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#6DBE45]/12 via-white to-slate-50/80"
-            aria-hidden
-          />
-          <div className="relative flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-8">
-            <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#6DBE45]">Tables</p>
-              <h1 className="font-serif text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-                Table management
-              </h1>
-              <p className="mt-2 max-w-xl text-sm text-slate-500 sm:text-base">
-                Create tables and print a QR for each so guests can open your menu instantly.
-              </p>
-            </div>
-            <Link
-              href="/dashboard/tables/add"
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#6DBE45] px-5 py-3 text-sm font-bold text-white shadow-[0_8px_20px_rgba(109,190,69,0.25)] transition-all hover:bg-[#5aa337] sm:px-6"
-            >
-              <Plus className="h-5 w-5" strokeWidth={2.5} />
-              Add table
-            </Link>
-          </div>
-        </div>
+  const handleBulkPrint = () => {
+    toast('Preparing PDF...', {
+      icon: <Printer className="w-4 h-4" />,
+      description: 'Collating all active tables into a printable PDF layout.',
+    });
+  };
 
+  // Add Table Logic
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant) {
+      toast.error('Restaurant data not found.');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const num = Number(formInput);
+      const response = await generateQR(restaurant.slug, restaurant.id, num);
+      if (response && typeof response === 'object' && (response as any).tableId) {
+        toast.success(`Table ${num} created successfully!`);
+        setIsAddModalOpen(false);
+        setFormInput('');
+        refetch();
+      }
+    } catch (error: any) {
+      let errMsg = "Failed to generate QR.";
+      if (error.message?.includes('already exists')) {
+        errMsg = error.message.replace('Failed to generate QR: ', ''); 
+      }
+      toast.error(errMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Edit Table Logic
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTable || !restaurant) return;
+    
+    if (formInput === editingTable.table_number) {
+      setIsEditingClosed();
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/update-table', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId: editingTable.id,
+          newTableNumber: Number(formInput),
+          restaurantId: restaurant.id,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update table');
+      }
+
+      toast.success('Table updated & new QR generated!');
+      setIsEditingClosed();
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || 'Something went wrong.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const setIsEditingClosed = () => {
+    setEditingTable(null);
+    setFormInput('');
+  };
+
+  // --- FILTERING ---
+  const filteredTables = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return tables;
+    return tables.filter((t) => t.table_number.toLowerCase().includes(q));
+  }, [tables, searchQuery]);
+
+  return (
+    <div className="w-full min-h-screen bg-slate-50 font-sans flex flex-col pb-24 lg:pb-12 overflow-x-hidden">
+      
+      {/* --- PREMIUM HEADER & BULK ACTIONS --- */}
+      <div className="mb-8 shrink-0 px-4 md:px-6 lg:px-8 pt-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-slate-200/60 pb-8 bg-white/50 backdrop-blur-md sticky top-0 z-20">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">
+             Print Studio
+          </h1>
+          <p className="text-sm font-medium text-slate-500 mt-2">
+             Manage floor layouts and generate premium tent cards.
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3 w-full md:w-auto">
+           <button 
+             onClick={() => { setFormInput(''); setIsAddModalOpen(true); }}
+             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-slate-800 transition-all active:scale-95"
+           >
+             <Plus size={18} />
+             Add table
+           </button>
+           <button 
+             onClick={handleBulkPrint}
+             className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#6DBE45] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-[0_4px_14px_rgba(109,190,69,0.3)] hover:bg-[#5aa337] hover:shadow-[0_6px_20px_rgba(109,190,69,0.4)] transition-all active:scale-95"
+           >
+             <Printer size={18} />
+             Print All (PDF)
+           </button>
+        </div>
+      </div>
+
+      <div className="px-4 md:px-6 lg:px-8 flex flex-col gap-8">
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-            {error}
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 flex items-center gap-2">
+            <span className="font-bold">Error:</span> {error}
           </div>
         )}
 
-        {/* Toolbar: search + count */}
-        <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-            <div className="relative min-w-0 flex-1">
-              <label htmlFor="table-search" className="sr-only">
-                Search tables
-              </label>
-              <input
-                id="table-search"
-                type="search"
-                placeholder="Search by table name or number…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50/80 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-[#6DBE45] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/20"
-              />
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">
-              <span className="font-semibold tabular-nums text-slate-900">{tables.length}</span>
-              <span className="text-slate-400">{tables.length === 1 ? 'table' : 'tables'}</span>
-            </span>
-          </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+           <div className="relative max-w-sm w-full">
+             <input
+               type="text"
+               placeholder="Search tables (e.g. Table 04)..."
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               className="w-full bg-white border border-slate-200 rounded-xl pl-4 pr-4 py-2.5 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/30 focus:border-[#6DBE45] transition-all shadow-sm"
+             />
+           </div>
+           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+             {filteredTables.length} Tables Found
+           </p>
         </div>
 
-        <section aria-labelledby="tables-list-heading">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
-            <h2 id="tables-list-heading" className="text-sm font-semibold text-slate-800">
-              QR codes
-            </h2>
-            <p className="text-xs text-slate-500">
-              {filteredTables.length === tables.length ? (
-                <span>
-                  <span className="font-medium text-slate-700">{tables.length}</span> total
-                </span>
-              ) : (
-                <>
-                  Showing <span className="font-medium text-slate-700">{filteredTables.length}</span> of{' '}
-                  <span className="font-medium text-slate-700">{tables.length}</span>
-                </>
-              )}
-            </p>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-[#6DBE45]" />
+            <p className="text-sm font-bold text-slate-400">Loading Floor Plan...</p>
           </div>
+        ) : filteredTables.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 bg-white rounded-3xl border border-slate-100 border-dashed">
+            <p className="text-lg font-black text-slate-700">No tables found.</p>
+            <p className="text-sm text-slate-500 mt-1">Try adjusting your search or add a new table.</p>
+          </div>
+        ) : (
+          /* --- THE TENT CARD GRID --- */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+             {filteredTables.map(table => {
+               const isActive = !table.is_locked;
+               const isUpdating = actionLoading === `lock-${table.id}`;
 
-          {loading ? (
-            // Localised Loading State
-            <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white shadow-sm">
-              <Loader2 className="h-10 w-10 animate-spin text-[#6DBE45]" aria-hidden />
-              <p className="mt-4 text-sm text-slate-500">Loading tables…</p>
-            </div>
-          ) :filteredTables.length === 0 ? (
-            <div className="rounded-xl border-2 border-dashed border-[#6DBE45]/25 bg-[#6DBE45]/10 px-4 py-10 text-center sm:py-12">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-[#6DBE45]/20 bg-white shadow-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#6DBE45]/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <p className="text-sm font-semibold text-slate-900">
-                {tables.length === 0 ? 'No tables yet' : 'No results'}
-              </p>
-              <p className="mx-auto mt-1 max-w-sm text-xs text-slate-600 sm:text-sm">
-                {tables.length === 0
-                  ? 'Add a table to generate its QR code.'
-                  : searchQuery
-                    ? 'Try another search or clear the filter.'
-                    : ''}
-              </p>
-              {tables.length === 0 && (
-                <Link
-                  href="/dashboard/tables/add"
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#6DBE45] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#5aa337] sm:text-sm"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add table
-                </Link>
-              )}
-              {tables.length > 0 && searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="mt-4 text-xs font-semibold text-[#6DBE45] hover:underline"
-                >
-                  Clear search
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredTables.map((table) => (
-                <div
-                  key={table.id}
-                  className="flex flex-col justify-between rounded-xl border border-slate-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <h3 className="mb-3 text-center text-sm font-bold text-slate-900 sm:text-base">
-                    {table.table_number}
-                  </h3>
-                  {/* QR Image Display */}
-                  {table.id ? (
-                    <div className="flex flex-col items-center">
-                      <QRCodeGenerator tableId={String(table.id)} tableName={String(table.table_number)} size={128} />
-                      
-                      {/* View & Download Buttons for QR */}
-                      <div className="mt-3 grid w-full grid-cols-2 gap-2">
+               return (
+                 <motion.div 
+                   layout
+                   initial={{ opacity: 0, y: 20 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   key={table.id}
+                   className="flex flex-col bg-white rounded-3xl border border-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-300 overflow-hidden"
+                 >
+                    {/* Top Status Bar */}
+                    <div className={`h-1.5 w-full transition-colors ${isActive ? 'bg-[#6DBE45]' : 'bg-amber-400'}`} />
+
+                    <div className="p-5 flex flex-col items-center relative h-full">
+                      {/* Subdued bg watermark */}
+                      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[80px] font-black text-slate-50 pointer-events-none z-0 whitespace-nowrap">
+                        {table.table_number.replace('Table', '').trim()}
+                      </span>
+
+                      {/* Header */}
+                      <h3 className="text-lg font-black text-slate-900 tracking-tight z-10 mb-4">{table.table_number}</h3>
+
+                      {/* QR Display */}
+                      <div className={`z-10 bg-white p-3 rounded-2xl shadow-sm border border-slate-100 transition-opacity flex items-center justify-center mb-5 ${isActive ? 'opacity-100' : 'opacity-40 grayscale'}`}>
+                        {table.id ? (
+                           <QRCodeGenerator tableId={String(table.id)} tableName={String(table.table_number)} size={120} />
+                        ) : (
+                           <div className="w-[120px] h-[120px] flex items-center justify-center">
+                             <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                           </div>
+                        )}
+                      </div>
+
+                      {/* Primary Actions (View & Download) */}
+                      <div className="z-10 w-full grid grid-cols-2 gap-2 mt-auto">
                         <button
                           type="button"
                           onClick={() => setSelectedTableForModal(table as unknown as TableItem)}
-                          className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                          className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100 hover:border-slate-300"
                         >
-                          <Eye className="h-3.5 w-3.5" /> View
+                          <Eye size={14} /> View QR
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDownloadQR(String(table.id), String(table.table_number))}
-                          className="flex items-center justify-center gap-1.5 rounded-lg bg-[#6DBE45]/10 py-2 text-xs font-semibold text-[#6DBE45] transition-colors hover:bg-[#6DBE45] hover:text-white"
+                          className="flex items-center justify-center gap-1.5 rounded-xl bg-[#6DBE45]/10 py-2.5 text-xs font-bold text-[#4A8F2F] transition-colors hover:bg-[#6DBE45] hover:text-white"
                         >
-                          <Download className="h-3.5 w-3.5" /> Download
+                          <Download size={14} /> Download
                         </button>
                       </div>
+
+                      {/* Secondary Actions Row */}
+                      <div className="z-10 w-full mt-4 pt-4 border-t border-slate-100 flex items-center justify-between px-1">
+                         <button
+                           type="button"
+                           onClick={() => handleToggleLock(String(table.id), !!table.is_locked)}
+                           disabled={isUpdating}
+                           className={`inline-flex items-center gap-1.5 text-xs font-bold transition-colors disabled:opacity-50 ${table.is_locked ? 'text-amber-500 hover:text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
+                         >
+                           {isUpdating ? <Loader2 size={14} className="animate-spin" /> : (table.is_locked ? <Lock size={14} /> : <Unlock size={14} />)}
+                           {table.is_locked ? 'Locked' : 'Unlocked'}
+                         </button>
+                         
+                         <div className="flex items-center gap-4">
+                           <button
+                             type="button"
+                             onClick={() => { setEditingTable(table); setFormInput(table.table_number); }}
+                             className="text-slate-400 hover:text-[#6DBE45] transition-colors"
+                             title="Edit Table"
+                           >
+                             <Edit size={16} />
+                           </button>
+                           <button
+                             type="button"
+                             onClick={() => {
+                               if(window.confirm(`Delete ${table.table_number}?`)) deleteTable(String(table.id));
+                             }}
+                             className="text-slate-400 hover:text-rose-500 transition-colors"
+                             title="Delete Table"
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                         </div>
+                      </div>
+
                     </div>
-                  ) : (
-                    <div className="flex h-28 items-center justify-center text-slate-400">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-[#6DBE45]" />
-                    </div>
-                  )}
-                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleLock(String(table.id), !!table.is_locked)}
-                      disabled={actionLoading === `lock-${table.id}`}
-                      className={`inline-flex items-center justify-center min-w-[70px] gap-1 text-xs font-semibold sm:text-sm transition-colors disabled:opacity-50 ${table.is_locked ? 'text-amber-500 hover:text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      {actionLoading === `lock-${table.id}` ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        table.is_locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />
-                      )}
-                      {actionLoading === `lock-${table.id}` ? 'Loading' : (table.is_locked ? 'Unlock' : 'Lock')}
-                    </button>
-                    
-                    <div className="flex items-center gap-3">
-                      <Link
-                        href={`/dashboard/tables/${table.id}/edit`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-[#6DBE45] transition-colors hover:text-[#5aa337] sm:text-sm"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                        Edit
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => deleteTable(String(table.id))}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-red-500 transition-colors hover:text-red-700 sm:text-sm"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                 </motion.div>
+               )
+             })}
+          </div>
+        )}
       </div>
+
+      {/* --- VIEW QR MODAL --- */}
       <QRModal 
         isOpen={!!selectedTableForModal} 
         onClose={() => setSelectedTableForModal(null)} 
         tableId={selectedTableForModal?.id} 
         tableName={selectedTableForModal?.table_number} 
       />
+
+      {/* --- ADD / EDIT MODALS --- */}
+      <AnimatePresence>
+        {(isAddModalOpen || editingTable) && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden"
+            >
+               <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">
+                      {editingTable ? 'Edit Table' : 'Add New Table'}
+                    </h2>
+                    <p className="text-xs font-semibold text-slate-500 mt-1">
+                      {editingTable ? 'Update the table identifier.' : 'Enter a table number to generate a QR.'}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => editingTable ? setIsEditingClosed() : setIsAddModalOpen(false)} 
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200/50 text-slate-500 hover:bg-slate-200 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+               </div>
+
+               <form onSubmit={editingTable ? handleEditSubmit : handleAddSubmit} className="p-6">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Table Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="e.g. 12"
+                    value={formInput}
+                    onChange={(e) => setFormInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6DBE45]/30 focus:border-[#6DBE45] transition-all"
+                  />
+                  
+                  <div className="mt-8 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => editingTable ? setIsEditingClosed() : setIsAddModalOpen(false)}
+                      className="flex-1 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !formInput.trim()}
+                      className="flex-1 py-3 rounded-xl font-bold text-white bg-[#6DBE45] hover:bg-[#5aa337] transition-colors flex items-center justify-center shadow-md shadow-[#6DBE45]/20 disabled:opacity-50"
+                    >
+                      {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : 'Save Table'}
+                    </button>
+                  </div>
+               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
