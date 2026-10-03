@@ -14,10 +14,14 @@ import {
   X,
   ShieldCheck,
   ChevronRight,
+  Inbox,
 } from 'lucide-react';
+import useSWR from 'swr';
+import { getUnreadCount } from '@/app/actions/inbox';
 
 const NAV_ITEMS = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { href: '/admin/inbox', label: 'Inbox', icon: Inbox },
   { href: '/admin/menu-library', label: 'Menu Library', icon: BookOpen },
   { href: '/admin/restaurants', label: 'Restaurants', icon: Store },
 ];
@@ -56,8 +60,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return pathname.startsWith(href);
   };
 
-  const SidebarContent = () => (
-    <div className="flex h-full flex-col">
+  const SidebarContent = () => {
+    const { data: unreadCount = 0 } = useSWR('admin_unread_count', getUnreadCount, { refreshInterval: 15000 });
+
+    return (
+      <div className="flex h-full flex-col">
       {/* ── Brand ── */}
       <div className="flex items-center gap-3 border-b border-slate-700/50 px-5 py-5">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/20">
@@ -91,7 +98,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <item.icon className={`h-[18px] w-[18px] shrink-0 ${active ? 'text-emerald-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
               <span className="flex-1">{item.label}</span>
-              {active && <ChevronRight className="h-3.5 w-3.5 text-emerald-400/50" />}
+              {item.label === 'Inbox' && unreadCount > 0 && (
+                <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-500 px-1.5 text-[10px] font-bold text-white shadow-[0_0_10px_rgba(59,130,246,0.6)]">
+                  {unreadCount}
+                </span>
+              )}
+              {active && item.label !== 'Inbox' && <ChevronRight className="h-3.5 w-3.5 text-emerald-400/50" />}
             </Link>
           );
         })}
@@ -110,7 +122,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="flex h-screen bg-slate-50">

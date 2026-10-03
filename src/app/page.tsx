@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Instagram, Linkedin, UserCircle2, X, Loader2, Youtube } from 'lucide-react';
-import ContactModal from '@/components/ContactModal';
+import { ContactDrawer } from '@/components/ContactDrawer';
 import HelpModal from '@/components/HelpModal';
 import { supabase } from '@/lib/supabase/client';
 import HeroSection from './landing/components/hero';
@@ -24,7 +24,6 @@ export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-  const [isSignupGateOpen, setIsSignupGateOpen] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
   const [avatarLabel, setAvatarLabel] = useState<string>('U');
 
@@ -40,7 +39,6 @@ export default function Home() {
     const setUserState = (user: any | null) => {
       if (!isMounted) return;
       setIsAuthed(Boolean(user));
-      setIsSignupGateOpen(!user);
       const rawLabel =
         user?.user_metadata?.owner_name ||
         user?.user_metadata?.restaurant_name ||
@@ -67,7 +65,7 @@ export default function Home() {
     <div className="min-h-screen bg-white font-sans text-slate-800 selection:bg-[#6DBE45] selection:text-white">
 
       {/* Modals */}
-      <ContactModal isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
+      <ContactDrawer isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
       <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} />
 
       {/* NAVIGATION */}

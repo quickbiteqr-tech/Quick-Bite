@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Instagram, Linkedin, UserCircle2, X, Loader2, Youtube } from 'lucide-react';
-import ContactModal from '@/components/ContactModal';
+import { ContactDrawer } from '@/components/ContactDrawer';
 import HelpModal from '@/components/HelpModal';
 import { supabase } from '@/lib/supabase/client';
 import HeroSection from './components/hero';
@@ -67,7 +67,7 @@ export default function Home() {
     <div className="min-h-screen bg-white font-sans text-slate-800 selection:bg-[#6DBE45] selection:text-white">
 
       {/* Modals */}
-      <ContactModal isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
+      <ContactDrawer isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
       <HelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} />
 
       {/* NAVIGATION */}

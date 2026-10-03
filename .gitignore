@@ -48,3 +48,6 @@ next-env.d.ts
 
 /docs/*
 /scratch/
+
+# load testing
+test-config.json
