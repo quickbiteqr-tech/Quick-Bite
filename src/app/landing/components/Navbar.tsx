@@ -92,7 +92,7 @@ export default function Navbar({ isAuthed, avatarLabel, onContactClick }: Navbar
         <Link href="/" className="flex items-center gap-1 z-50">
           <Image
             src="/quickbitelogo.png"
-            alt="QuickBiteQR logo"
+            alt="QuickBiteQR - Zero-Commission POS and QR Menu Logo"
             width={160}
             height={40}
             priority
