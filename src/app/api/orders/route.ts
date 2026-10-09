@@ -7,8 +7,8 @@ const cartItemSchema = z.object({
   id: z.string().uuid("Invalid menu item ID"),
   quantity: z.number().int().positive("Quantity must be greater than 0").max(100, "Quantity too high"),
   price: z.number().nonnegative("Price cannot be negative").optional(),
-  variantId: z.string().uuid("Invalid variant ID").optional(),
-  variantLabel: z.string().max(200).optional(),
+  selectedVariantId: z.string().uuid("Invalid variant ID").optional(),
+  selectedVariantLabel: z.string().max(200).optional(),
   variantPrice: z.number().nonnegative("Variant price cannot be negative").optional(),
   selectedModifiers: z.array(
     z.object({
@@ -165,7 +165,7 @@ export async function POST(req: Request) {
   const priceMap = new Map(menuItems.map((item) => [item.id, item.price]));
 
   // Securely fetch variant and modifier prices from DB
-  const variantIds = cartItems.map(i => i.variantId).filter(Boolean) as string[];
+  const variantIds = cartItems.map(i => i.selectedVariantId).filter(Boolean) as string[];
   const { data: variants } = variantIds.length > 0 
     ? await supabase.from('menu_item_variants').select('id, price').in('id', variantIds) 
     : { data: [] };
@@ -182,7 +182,7 @@ export async function POST(req: Request) {
   
   const secureOrderItems = cartItems.map((item) => {
     const basePrice = priceMap.get(item.id) || 0;
-    const variantPrice = item.variantId ? (variantMap.get(item.variantId) || 0) : 0;
+    const variantPrice = item.selectedVariantId ? (variantMap.get(item.selectedVariantId) || 0) : 0;
     
     const modifierTotal = (item.selectedModifiers || []).reduce((sum, mod) => {
       return sum + (modifierMap.get(mod.id) || 0);
@@ -197,8 +197,8 @@ export async function POST(req: Request) {
       menu_item: item.id, // Column mapped via foreign key in Supabase
       quantity: item.quantity,
       price: finalUnitPrice,
-      variant_id: item.variantId || null,
-      variant_label: item.variantLabel || null,
+      variant_id: item.selectedVariantId || null,
+      variant_label: item.selectedVariantLabel || null,
       modifiers: item.selectedModifiers || null,
     };
   });
